@@ -17,6 +17,40 @@ function SKT_UI:CreateWindow(options)
     local Window = {}
     local Title = options.Name or "SKT Hub"
     
+    Window.Flags = {}
+    Window.ConfigName = string.gsub(Title, " ", "_") .. "_Config.json"
+    Window.FolderName = "SKT_Hub_Configs"
+    
+    local HttpService = game:GetService("HttpService")
+    
+    function Window:SaveConfig()
+        if not writefile then return end
+        pcall(function()
+            if isfolder and not isfolder(Window.FolderName) then
+                makefolder(Window.FolderName)
+            end
+            local json = HttpService:JSONEncode(Window.Flags)
+            writefile(Window.FolderName .. "/" .. Window.ConfigName, json)
+        end)
+    end
+    
+    function Window:LoadConfig()
+        if not readfile then return end
+        local path = Window.FolderName .. "/" .. Window.ConfigName
+        pcall(function()
+            if isfile and isfile(path) then
+                local decoded = HttpService:JSONDecode(readfile(path))
+                if type(decoded) == "table" then
+                    for k, v in pairs(decoded) do
+                        Window.Flags[k] = v
+                    end
+                end
+            end
+        end)
+    end
+    
+    Window:LoadConfig()
+    
     -- Cleanup old UI
     if CoreGui:FindFirstChild("SKT_Hub_Custom") then
         CoreGui.SKT_Hub_Custom:Destroy()
@@ -242,6 +276,14 @@ function SKT_UI:CreateWindow(options)
             local state = opts.CurrentValue or false
             local callback = opts.Callback or function() end
             
+            if opts.Flag then
+                if Window.Flags[opts.Flag] ~= nil then
+                    state = Window.Flags[opts.Flag]
+                else
+                    Window.Flags[opts.Flag] = state
+                end
+            end
+            
             local ToggleFrame = Instance.new("Frame")
             ToggleFrame.Size = UDim2.new(1, 0, 0, 35)
             ToggleFrame.BackgroundColor3 = UI_Config.SecondaryColor
@@ -276,16 +318,20 @@ function SKT_UI:CreateWindow(options)
             
             local function toggle()
                 state = not state
+                if opts.Flag then
+                    Window.Flags[opts.Flag] = state
+                    Window:SaveConfig()
+                end
                 local goalBg = state and UI_Config.AccentColor or UI_Config.MainColor
                 local goalPos = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
                 TweenService:Create(SwitchBg, TweenInfo.new(0.2), {BackgroundColor3 = goalBg}):Play()
                 TweenService:Create(SwitchKnob, TweenInfo.new(0.2), {Position = goalPos}):Play()
-                callback(state)
+                task.spawn(callback, state)
             end
             
             SwitchBg.MouseButton1Click:Connect(toggle)
             
-            if state then callback(state) end
+            if state then task.spawn(callback, state) end
         end
         
         function Tab:CreateSlider(opts)
@@ -295,6 +341,14 @@ function SKT_UI:CreateWindow(options)
             local val = opts.CurrentValue or min
             local suffix = opts.Suffix or ""
             local callback = opts.Callback or function() end
+            
+            if opts.Flag then
+                if Window.Flags[opts.Flag] ~= nil then
+                    val = Window.Flags[opts.Flag]
+                else
+                    Window.Flags[opts.Flag] = val
+                end
+            end
             
             local SliderFrame = Instance.new("Frame")
             SliderFrame.Size = UDim2.new(1, 0, 0, 50)
@@ -335,7 +389,13 @@ function SKT_UI:CreateWindow(options)
                 Fill.Size = UDim2.new(pos, 0, 1, 0)
                 val = math.floor(min + (max - min) * pos)
                 Label.Text = sName .. " : " .. tostring(val) .. " " .. suffix
-                callback(val)
+                
+                if opts.Flag then
+                    Window.Flags[opts.Flag] = val
+                    Window:SaveConfig()
+                end
+                
+                task.spawn(callback, val)
             end
             
             SliderBg.InputBegan:Connect(function(input)
@@ -354,6 +414,8 @@ function SKT_UI:CreateWindow(options)
                     update(input)
                 end
             end)
+            
+            task.spawn(callback, val)
         end
         
         function Tab:CreateDropdown(opts)
@@ -362,6 +424,14 @@ function SKT_UI:CreateWindow(options)
             local current = opts.CurrentOption or {}
             local isMulti = opts.MultipleOptions or false
             local callback = opts.Callback or function() end
+            
+            if opts.Flag then
+                if Window.Flags[opts.Flag] ~= nil then
+                    current = Window.Flags[opts.Flag]
+                else
+                    Window.Flags[opts.Flag] = current
+                end
+            end
             
             local DropFrame = Instance.new("Frame")
             DropFrame.Size = UDim2.new(1, 0, 0, 35)
@@ -465,6 +535,11 @@ function SKT_UI:CreateWindow(options)
                             TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 35)}):Play()
                         end
                         
+                        if opts.Flag then
+                            Window.Flags[opts.Flag] = current
+                            Window:SaveConfig()
+                        end
+                        
                         Label.Text = dName .. " : " .. (isMulti and "Selected ("..#current..")" or (current[1] or "None"))
                         for _, child in ipairs(ListFrame:GetChildren()) do
                             if child:IsA("TextButton") then
@@ -495,6 +570,29 @@ function SKT_UI:CreateWindow(options)
             return {
                 Refresh = function(self, newOpts, newMultiOpts)
                     RefreshOptions(newOpts.Options or newOpts)
+                end,
+                Set = function(self, newValue)
+                    if type(newValue) ~= "table" then newValue = {newValue} end
+                    current = newValue
+                    
+                    if opts.Flag then
+                        Window.Flags[opts.Flag] = current
+                        Window:SaveConfig()
+                    end
+                    
+                    Label.Text = dName .. " : " .. (isMulti and "Selected ("..#current..")" or (current[1] or "None"))
+                    for _, child in ipairs(ListFrame:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            local copt = child.Text:sub(3)
+                            local selected = false
+                            if isMulti then
+                                for _, v in ipairs(current) do if v == copt then selected = true break end end
+                            else
+                                selected = (current[1] == copt)
+                            end
+                            child.TextColor3 = selected and UI_Config.AccentColor or UI_Config.DimTextColor
+                        end
+                    end
                 end
             }
         end
@@ -1863,4 +1961,3 @@ Tab_Trial:CreateToggle({
     end,
 })
 
-Rayfield:LoadConfiguration()
