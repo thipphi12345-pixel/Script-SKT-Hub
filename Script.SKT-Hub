@@ -1,0 +1,2176 @@
+local SKT_UI = {}
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+local UI_Config = {
+    MainColor = Color3.fromRGB(22, 24, 30), -- พรีเมียมมืด อมน้ำเงินนิดๆ
+    SecondaryColor = Color3.fromRGB(32, 35, 45), -- สว่างขึ้นเพื่อให้ตัดกันชัดเจน
+    AccentColor = Color3.fromRGB(255, 190, 50), -- สีทองหรูหรา (Premium Gold)
+    TextColor = Color3.fromRGB(255, 255, 255),
+    DimTextColor = Color3.fromRGB(180, 180, 180), -- ให้สว่างขึ้น จะได้อ่านง่าย
+    Font = Enum.Font.GothamMedium, -- เปลี่ยนฟอนต์ให้อ่านง่ายและดูแพงขึ้น
+    LogoID = "rbxassetid://136267911004509", -- เปลี่ยนกลับมาใช้ rbxassetid แบบเดิม
+}
+
+function SKT_UI:CreateWindow(options)
+    local Window = {}
+    local Title = options.Name or "SKT Hub"
+    
+    -- Cleanup old UI
+    if CoreGui:FindFirstChild("SKT_Hub_Custom") then
+        CoreGui.SKT_Hub_Custom:Destroy()
+    end
+    
+    local SG = Instance.new("ScreenGui")
+    SG.Name = "SKT_Hub_Custom"
+    SG.ResetOnSpawn = false
+    SG.Parent = CoreGui
+    
+    local MiniBtn = Instance.new("ImageButton")
+    MiniBtn.Name = "MiniBtn"
+    MiniBtn.Size = UDim2.new(0, 55, 0, 55)
+    MiniBtn.Position = UDim2.new(0, 20, 0.5, -25)
+    MiniBtn.BackgroundColor3 = UI_Config.MainColor -- ใช้สีพื้นหลัง UI
+    MiniBtn.BorderSizePixel = 2
+    MiniBtn.BorderColor3 = UI_Config.AccentColor -- ขอบสีทอง
+    local MiniCorner = Instance.new("UICorner", MiniBtn)
+    MiniCorner.CornerRadius = UDim.new(0.5, 0) -- ทำให้เป็นวงกลม
+    MiniBtn.Image = UI_Config.LogoID -- ใช้ Logo ของคุณเป็นปุ่มเปิดปิด
+    MiniBtn.Parent = SG
+    MiniBtn.Visible = false
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 600, 0, 400)
+    MainFrame.Position = UDim2.new(0.5, -300, 0.5, -200)
+    MainFrame.BackgroundColor3 = UI_Config.MainColor
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = SG
+    
+    local MainCorner = Instance.new("UICorner", MainFrame)
+    MainCorner.CornerRadius = UDim.new(0, 10)
+    
+    local UIStroke = Instance.new("UIStroke", MainFrame)
+    UIStroke.Color = UI_Config.AccentColor
+    UIStroke.Thickness = 2
+    
+    -- Background Logo (เต็มจอ แบบจางๆ สวยๆ)
+    local BgLogo = Instance.new("ImageLabel")
+    BgLogo.Size = UDim2.new(1, 0, 1, 0)
+    BgLogo.Position = UDim2.new(0, 0, 0, 0)
+    BgLogo.BackgroundTransparency = 1
+    BgLogo.Image = UI_Config.LogoID
+    BgLogo.ImageTransparency = 0.96 -- ปรับให้เป็นลายน้ำจางๆ มากๆ เพื่อไม่ให้รกตา (Watermark)
+    BgLogo.ImageColor3 = Color3.fromRGB(255, 255, 255) 
+    BgLogo.ScaleType = Enum.ScaleType.Fit
+    BgLogo.ZIndex = 0
+    BgLogo.Parent = MainFrame
+    
+    -- เพิ่มแสงเงาสีเหลืองจางๆ มุมจอให้ดูมีมิติ
+    local Glow = Instance.new("ImageLabel")
+    Glow.Size = UDim2.new(1.5, 0, 1.5, 0)
+    Glow.Position = UDim2.new(-0.25, 0, -0.25, 0)
+    Glow.BackgroundTransparency = 1
+    Glow.Image = "rbxassetid://13192853039" -- Soft Glow
+    Glow.ImageColor3 = UI_Config.AccentColor
+    Glow.ImageTransparency = 0.85
+    Glow.ZIndex = 0
+    Glow.Parent = MainFrame
+    
+    local ResizeBtn = Instance.new("TextButton")
+    ResizeBtn.Name = "ResizeBtn"
+    ResizeBtn.Size = UDim2.new(0, 20, 0, 20)
+    ResizeBtn.Position = UDim2.new(1, -20, 1, -20)
+    ResizeBtn.BackgroundTransparency = 1
+    ResizeBtn.Text = "↘"
+    ResizeBtn.TextColor3 = UI_Config.DimTextColor
+    ResizeBtn.TextSize = 18
+    ResizeBtn.ZIndex = 10
+    ResizeBtn.Parent = MainFrame
+    
+    local resizing, resizeInput, resizeStart, startSize
+    ResizeBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            resizeStart = input.Position
+            startSize = MainFrame.Size
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end)
+        end
+    end)
+    ResizeBtn.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            resizeInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == resizeInput and resizing then
+            local delta = input.Position - resizeStart
+            local newWidth = math.max(400, startSize.X.Offset + delta.X)
+            local newHeight = math.max(300, startSize.Y.Offset + delta.Y)
+            MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+        end
+    end)
+
+    
+    local TopBar = Instance.new("Frame")
+    TopBar.Name = "TopBar"
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.BackgroundColor3 = UI_Config.SecondaryColor
+    TopBar.BorderSizePixel = 0
+    TopBar.ZIndex = 2
+    TopBar.Parent = MainFrame
+    
+    local TopGradient = Instance.new("UIGradient", TopBar)
+    TopGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.7, 0.7, 0.7))
+    })
+    TopGradient.Rotation = 90
+    
+    local TopLine = Instance.new("Frame")
+    TopLine.Size = UDim2.new(1, 0, 0, 1)
+    TopLine.Position = UDim2.new(0, 0, 1, 0)
+    TopLine.BackgroundColor3 = UI_Config.AccentColor
+    TopLine.BorderSizePixel = 0
+    TopLine.ZIndex = 3
+    TopLine.Parent = TopBar
+    
+    local TopLogo = Instance.new("ImageLabel")
+    TopLogo.Size = UDim2.new(0, 26, 0, 26)
+    TopLogo.Position = UDim2.new(0, 12, 0.5, -13)
+    TopLogo.BackgroundTransparency = 1
+    TopLogo.Image = UI_Config.LogoID
+    TopLogo.ZIndex = 3
+    TopLogo.Parent = TopBar
+    
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size = UDim2.new(1, -80, 1, 0)
+    TitleLabel.Position = UDim2.new(0, 48, 0, 0)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = Title
+    TitleLabel.TextColor3 = UI_Config.AccentColor
+    TitleLabel.Font = UI_Config.Font
+    TitleLabel.TextSize = 18
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.ZIndex = 3
+    TitleLabel.Parent = TopBar
+    
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Size = UDim2.new(0, 40, 0, 40)
+    CloseBtn.Position = UDim2.new(1, -40, 0, 0)
+    CloseBtn.BackgroundTransparency = 1
+    CloseBtn.Text = "-"
+    CloseBtn.TextColor3 = UI_Config.TextColor
+    CloseBtn.Font = UI_Config.Font
+    CloseBtn.TextSize = 24
+    CloseBtn.Parent = TopBar
+    
+    local isMinimized = false
+    CloseBtn.MouseButton1Click:Connect(function()
+        MainFrame.Visible = false
+        MiniBtn.Visible = true
+    end)
+    
+    MiniBtn.MouseButton1Click:Connect(function()
+        MainFrame.Visible = true
+        MiniBtn.Visible = false
+    end)
+    
+    -- Draggable
+    local dragging, dragInput, dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    TopBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    
+    local Sidebar = Instance.new("ScrollingFrame")
+    Sidebar.Name = "Sidebar"
+    Sidebar.Size = UDim2.new(0, 150, 1, -40)
+    Sidebar.Position = UDim2.new(0, 0, 0, 40)
+    Sidebar.BackgroundColor3 = UI_Config.SecondaryColor
+    Sidebar.BorderSizePixel = 0
+    Sidebar.ScrollBarThickness = 2
+    Sidebar.Parent = MainFrame
+    
+    local SidebarLayout = Instance.new("UIListLayout", Sidebar)
+    SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- เส้นกั้นระหว่าง Sidebar กับ Content
+    local SidebarLine = Instance.new("Frame")
+    SidebarLine.Size = UDim2.new(0, 1, 1, -40)
+    SidebarLine.Position = UDim2.new(0, 150, 0, 40)
+    SidebarLine.BackgroundColor3 = Color3.fromRGB(50, 55, 65)
+    SidebarLine.BorderSizePixel = 0
+    SidebarLine.ZIndex = 2
+    SidebarLine.Parent = MainFrame
+    
+    local Content = Instance.new("Frame")
+    Content.Name = "Content"
+    Content.Size = UDim2.new(1, -150, 1, -40)
+    Content.Position = UDim2.new(0, 150, 0, 40)
+    Content.BackgroundTransparency = 1
+    Content.Parent = MainFrame
+    
+    local activeTabBtn = nil
+    local activeTabContent = nil
+    
+    function Window:CreateTab(name, iconId)
+        local Tab = {}
+        
+        local TabBtn = Instance.new("TextButton")
+        TabBtn.Size = UDim2.new(1, 0, 0, 40)
+        TabBtn.BackgroundTransparency = 1
+        TabBtn.Text = name
+        TabBtn.TextColor3 = UI_Config.DimTextColor
+        TabBtn.Font = UI_Config.Font
+        TabBtn.TextSize = 14
+        TabBtn.Parent = Sidebar
+        
+        local TabContent = Instance.new("ScrollingFrame")
+        TabContent.Size = UDim2.new(1, -20, 1, -20)
+        TabContent.Position = UDim2.new(0, 10, 0, 10)
+        TabContent.BackgroundTransparency = 1
+        TabContent.ScrollBarThickness = 4
+        TabContent.ScrollBarImageColor3 = UI_Config.AccentColor
+        TabContent.Visible = false
+        TabContent.Parent = Content
+        
+        local ContentLayout = Instance.new("UIListLayout", TabContent)
+        ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        ContentLayout.Padding = UDim.new(0, 12) -- เพิ่มระยะห่างให้แต่ละช่องแยกกันชัดเจน
+        
+        -- ทำให้แต่ละช่อง (Toggle, Dropdown) มีกรอบแยกกันชัดเจน
+        TabContent.ChildAdded:Connect(function(child)
+            if child:IsA("Frame") then
+                local stroke = Instance.new("UIStroke")
+                stroke.Color = Color3.fromRGB(50, 55, 65)
+                stroke.Thickness = 1
+                stroke.Parent = child
+            end
+        end)
+        
+        ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            TabContent.CanvasSize = UDim2.new(0, 0, 0, ContentLayout.AbsoluteContentSize.Y + 20)
+        end)
+        
+        if not activeTabBtn then
+            activeTabBtn = TabBtn
+            activeTabContent = TabContent
+            TabBtn.TextColor3 = UI_Config.AccentColor
+            TabContent.Visible = true
+        end
+        
+        TabBtn.MouseButton1Click:Connect(function()
+            if activeTabBtn then
+                activeTabBtn.TextColor3 = UI_Config.DimTextColor
+                activeTabContent.Visible = false
+            end
+            activeTabBtn = TabBtn
+            activeTabContent = TabContent
+            TabBtn.TextColor3 = UI_Config.AccentColor
+            TabContent.Visible = true
+        end)
+        
+        function Tab:CreateToggle(opts)
+            local tName = opts.Name or "Toggle"
+            local state = opts.CurrentValue or false
+            local callback = opts.Callback or function() end
+            
+            local ToggleFrame = Instance.new("Frame")
+            ToggleFrame.Size = UDim2.new(1, 0, 0, 35)
+            ToggleFrame.BackgroundColor3 = UI_Config.SecondaryColor
+            ToggleFrame.Parent = TabContent
+            Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 5)
+            
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(1, -60, 1, 0)
+            Label.Position = UDim2.new(0, 10, 0, 0)
+            Label.BackgroundTransparency = 1
+            Label.Text = tName
+            Label.TextColor3 = UI_Config.TextColor
+            Label.Font = UI_Config.Font
+            Label.TextSize = 14
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = ToggleFrame
+            
+            local SwitchBg = Instance.new("TextButton")
+            SwitchBg.Size = UDim2.new(0, 40, 0, 20)
+            SwitchBg.Position = UDim2.new(1, -50, 0.5, -10)
+            SwitchBg.BackgroundColor3 = state and UI_Config.AccentColor or UI_Config.MainColor
+            SwitchBg.Text = ""
+            SwitchBg.Parent = ToggleFrame
+            Instance.new("UICorner", SwitchBg).CornerRadius = UDim.new(1, 0)
+            
+            local SwitchKnob = Instance.new("Frame")
+            SwitchKnob.Size = UDim2.new(0, 16, 0, 16)
+            SwitchKnob.Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+            SwitchKnob.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            SwitchKnob.Parent = SwitchBg
+            Instance.new("UICorner", SwitchKnob).CornerRadius = UDim.new(1, 0)
+            
+            local function toggle()
+                state = not state
+                local goalBg = state and UI_Config.AccentColor or UI_Config.MainColor
+                local goalPos = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+                TweenService:Create(SwitchBg, TweenInfo.new(0.2), {BackgroundColor3 = goalBg}):Play()
+                TweenService:Create(SwitchKnob, TweenInfo.new(0.2), {Position = goalPos}):Play()
+                callback(state)
+            end
+            
+            SwitchBg.MouseButton1Click:Connect(toggle)
+            
+            if state then callback(state) end
+        end
+        
+        function Tab:CreateSlider(opts)
+            local sName = opts.Name or "Slider"
+            local min = opts.Range[1] or 0
+            local max = opts.Range[2] or 100
+            local val = opts.CurrentValue or min
+            local suffix = opts.Suffix or ""
+            local callback = opts.Callback or function() end
+            
+            local SliderFrame = Instance.new("Frame")
+            SliderFrame.Size = UDim2.new(1, 0, 0, 50)
+            SliderFrame.BackgroundColor3 = UI_Config.SecondaryColor
+            SliderFrame.Parent = TabContent
+            Instance.new("UICorner", SliderFrame).CornerRadius = UDim.new(0, 5)
+            
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(1, -20, 0, 20)
+            Label.Position = UDim2.new(0, 10, 0, 5)
+            Label.BackgroundTransparency = 1
+            Label.Text = sName .. " : " .. tostring(val) .. " " .. suffix
+            Label.TextColor3 = UI_Config.TextColor
+            Label.Font = UI_Config.Font
+            Label.TextSize = 13
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = SliderFrame
+            
+            local SliderBg = Instance.new("TextButton")
+            SliderBg.Size = UDim2.new(1, -20, 0, 10)
+            SliderBg.Position = UDim2.new(0, 10, 0, 30)
+            SliderBg.BackgroundColor3 = UI_Config.MainColor
+            SliderBg.Text = ""
+            SliderBg.Parent = SliderFrame
+            Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(1, 0)
+            
+            local Fill = Instance.new("Frame")
+            local ratio = (val - min) / (max - min)
+            if ratio ~= ratio then ratio = 0 end -- NaN check
+            Fill.Size = UDim2.new(ratio, 0, 1, 0)
+            Fill.BackgroundColor3 = UI_Config.AccentColor
+            Fill.Parent = SliderBg
+            Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+            
+            local dragging = false
+            local function update(input)
+                local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
+                Fill.Size = UDim2.new(pos, 0, 1, 0)
+                val = math.floor(min + (max - min) * pos)
+                Label.Text = sName .. " : " .. tostring(val) .. " " .. suffix
+                callback(val)
+            end
+            
+            SliderBg.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    update(input)
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    update(input)
+                end
+            end)
+        end
+        
+        function Tab:CreateDropdown(opts)
+            local dName = opts.Name or "Dropdown"
+            local options = opts.Options or {}
+            local current = opts.CurrentOption or {}
+            local isMulti = opts.MultipleOptions or false
+            local callback = opts.Callback or function() end
+            
+            local DropFrame = Instance.new("Frame")
+            DropFrame.Size = UDim2.new(1, 0, 0, 35)
+            DropFrame.BackgroundColor3 = UI_Config.SecondaryColor
+            DropFrame.Parent = TabContent
+            DropFrame.ClipsDescendants = true
+            Instance.new("UICorner", DropFrame).CornerRadius = UDim.new(0, 5)
+            
+            local MainBtn = Instance.new("TextButton")
+            MainBtn.Size = UDim2.new(1, 0, 0, 35)
+            MainBtn.BackgroundTransparency = 1
+            MainBtn.Text = ""
+            MainBtn.Parent = DropFrame
+            
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(1, -40, 1, 0)
+            Label.Position = UDim2.new(0, 10, 0, 0)
+            Label.BackgroundTransparency = 1
+            local displayVal = ""
+            if type(current) == "table" then
+                displayVal = isMulti and "Selected ("..#current..")" or (current[1] or "None")
+            else
+                displayVal = tostring(current)
+                current = {current}
+            end
+            Label.Text = dName .. " : " .. displayVal
+            Label.TextColor3 = UI_Config.TextColor
+            Label.Font = UI_Config.Font
+            Label.TextSize = 13
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = MainBtn
+            
+            local Icon = Instance.new("TextLabel")
+            Icon.Size = UDim2.new(0, 35, 0, 35)
+            Icon.Position = UDim2.new(1, -35, 0, 0)
+            Icon.BackgroundTransparency = 1
+            Icon.Text = "+"
+            Icon.TextColor3 = UI_Config.AccentColor
+            Icon.Font = UI_Config.Font
+            Icon.TextSize = 18
+            Icon.Parent = MainBtn
+            
+            local ListFrame = Instance.new("ScrollingFrame")
+            ListFrame.Size = UDim2.new(1, 0, 1, -35)
+            ListFrame.Position = UDim2.new(0, 0, 0, 35)
+            ListFrame.BackgroundTransparency = 1
+            ListFrame.ScrollBarThickness = 2
+            ListFrame.Parent = DropFrame
+            
+            local ListLayout = Instance.new("UIListLayout", ListFrame)
+            ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            
+            local expanded = false
+            MainBtn.MouseButton1Click:Connect(function()
+                expanded = not expanded
+                Icon.Text = expanded and "-" or "+"
+                local targetHeight = expanded and math.min(35 + (#options * 30), 150) or 35
+                TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+            end)
+            
+            local function RefreshOptions(newOpts)
+                options = newOpts
+                for _, child in ipairs(ListFrame:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+                
+                for _, opt in ipairs(options) do
+                    local btn = Instance.new("TextButton")
+                    btn.Size = UDim2.new(1, 0, 0, 30)
+                    btn.BackgroundColor3 = UI_Config.MainColor
+                    btn.BorderSizePixel = 0
+                    btn.Text = "  " .. tostring(opt)
+                    btn.TextColor3 = UI_Config.DimTextColor
+                    btn.Font = UI_Config.Font
+                    btn.TextSize = 13
+                    btn.TextXAlignment = Enum.TextXAlignment.Left
+                    btn.Parent = ListFrame
+                    
+                    local function updateBtnStyle()
+                        local selected = false
+                        if isMulti then
+                            for _, v in ipairs(current) do if v == opt then selected = true break end end
+                        else
+                            selected = (current[1] == opt)
+                        end
+                        btn.TextColor3 = selected and UI_Config.AccentColor or UI_Config.DimTextColor
+                    end
+                    updateBtnStyle()
+                    
+                    btn.MouseButton1Click:Connect(function()
+                        if isMulti then
+                            local found = false
+                            for i, v in ipairs(current) do
+                                if v == opt then table.remove(current, i) found = true break end
+                            end
+                            if not found then table.insert(current, opt) end
+                        else
+                            current = {opt}
+                            expanded = false
+                            Icon.Text = "+"
+                            TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 35)}):Play()
+                        end
+                        
+                        Label.Text = dName .. " : " .. (isMulti and "Selected ("..#current..")" or (current[1] or "None"))
+                        for _, child in ipairs(ListFrame:GetChildren()) do
+                            if child:IsA("TextButton") then
+                                local copt = child.Text:sub(3)
+                                local selected = false
+                                if isMulti then
+                                    for _, v in ipairs(current) do if v == copt then selected = true break end end
+                                else
+                                    selected = (current[1] == copt)
+                                end
+                                child.TextColor3 = selected and UI_Config.AccentColor or UI_Config.DimTextColor
+                            end
+                        end
+                        if isMulti then
+                            local ret = {}
+                            for _, v in ipairs(current) do ret[v] = true end
+                            callback(ret)
+                        else
+                            callback(current[1])
+                        end
+                    end)
+                end
+                ListFrame.CanvasSize = UDim2.new(0, 0, 0, #options * 30)
+            end
+            
+            RefreshOptions(options)
+            
+            return {
+                Refresh = function(self, newOpts, newMultiOpts)
+                    RefreshOptions(newOpts.Options or newOpts)
+                end,
+                Set = function(self, newValue)
+                    if type(newValue) ~= "table" then newValue = {newValue} end
+                    current = newValue
+                    Label.Text = dName .. " : " .. (isMulti and "Selected ("..#current..")" or (current[1] or "None"))
+                    for _, child in ipairs(ListFrame:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            local copt = child.Text:sub(3)
+                            local selected = false
+                            if isMulti then
+                                for _, v in ipairs(current) do if v == copt then selected = true break end end
+                            else
+                                selected = (current[1] == copt)
+                            end
+                            child.TextColor3 = selected and UI_Config.AccentColor or UI_Config.DimTextColor
+                        end
+                    end
+                end
+            }
+        end
+        function Tab:CreateButton(opts)
+            local bName = opts.Name or "Button"
+            local callback = opts.Callback or function() end
+            
+            local BtnFrame = Instance.new("Frame")
+            BtnFrame.Size = UDim2.new(1, 0, 0, 35)
+            BtnFrame.BackgroundColor3 = UI_Config.SecondaryColor
+            BtnFrame.Parent = TabContent
+            Instance.new("UICorner", BtnFrame).CornerRadius = UDim.new(0, 5)
+            
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 1, 0)
+            Btn.BackgroundTransparency = 1
+            Btn.Text = bName
+            Btn.TextColor3 = UI_Config.TextColor
+            Btn.Font = UI_Config.Font
+            Btn.TextSize = 14
+            Btn.Parent = BtnFrame
+            
+            Btn.MouseButton1Click:Connect(function()
+                local originalColor = BtnFrame.BackgroundColor3
+                TweenService:Create(BtnFrame, TweenInfo.new(0.1), {BackgroundColor3 = UI_Config.AccentColor}):Play()
+                task.wait(0.1)
+                TweenService:Create(BtnFrame, TweenInfo.new(0.1), {BackgroundColor3 = originalColor}):Play()
+                callback()
+            end)
+        end
+        
+        function Tab:CreateSection(name)
+            local Sec = Instance.new("TextLabel")
+            Sec.Size = UDim2.new(1, 0, 0, 25)
+            Sec.BackgroundTransparency = 1
+            Sec.Text = "- " .. name .. " -"
+            Sec.TextColor3 = UI_Config.AccentColor
+            Sec.Font = UI_Config.Font
+            Sec.TextSize = 14
+            Sec.Parent = TabContent
+        end
+        
+        return Tab
+    end
+    
+    function SKT_UI:Notify(opts)
+        -- simple print for notification
+        print("[SKT_UI Notify]", opts.Title, opts.Content)
+    end
+    
+    return Window
+end
+
+
+
+local Window = SKT_UI:CreateWindow({Name="SKT Hub"})
+
+-- Variables for Toggles
+local _G = {}
+_G.AutoFarm = false
+_G.AutoQuest = false
+_G.AutoStar = false
+_G.AutoRerollStats = false
+_G.AutoRerollTraits = false
+_G.AntiAFK = false
+_G.SelectedQuest = "PirateQuest"
+_G.SelectedEnemy = "Thief"
+
+-- // SERVICES
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+
+-- // TABS //
+local Tab_Autofarm = Window:CreateTab("Auto Farm")
+local Tab_Trial = Window:CreateTab("Trial")
+local Tab_OpenStar = Window:CreateTab("Open Star")
+local Tab_Teleport = Window:CreateTab("Teleport")
+local Tab_Misc = Window:CreateTab("Misc")
+local Tab_Player = Window:CreateTab("Player")
+local Tab_Boost = Window:CreateTab("Boost")
+
+-- ==========================================
+-- ⚔️ AUTO FARM TAB
+-- ==========================================
+local Section_Farm = Tab_Autofarm:CreateSection("Farm Settings")
+
+local MapOrderList = {
+    "Leveling City",
+    "Blacksmiths Village",
+    "Planet Of Warriors",
+    "Pirate Island",
+    "Tower City"
+}
+
+local MapUnlockCost = {
+    ["Leveling City"] = 0,
+    ["Blacksmiths Village"] = 100000,
+    ["Planet Of Warriors"] = 700000,
+    ["Pirate Island"] = 12000000,
+    ["Tower City"] = 300000000
+}
+
+local function GetBestMap()
+    _G.HighestUnlockedMapIndex = _G.HighestUnlockedMapIndex or 1
+    
+    -- 1. เช็คจากจุดที่ตัวละครยืนอยู่จริงๆ ว่าอยู่ด่านไหน (เพื่อกันบัคคนกดเลือกด่านมั่วแล้วระบบจำผิด)
+    pcall(function()
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local closestDist = 5000 -- กำหนดระยะสูงสุดที่ยอมรับได้
+            local closestIdx = 0
+            for i, mapName in ipairs(MapOrderList) do
+                local cleanName = string.gsub(mapName, " ", "")
+                local mapFolder = workspace:FindFirstChild(cleanName) or (workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(cleanName))
+                if mapFolder then
+                    local part = mapFolder:IsA("BasePart") and mapFolder or mapFolder:FindFirstChildWhichIsA("BasePart", true)
+                    if part then
+                        local d = (hrp.Position - part.Position).Magnitude
+                        if d < closestDist then
+                            closestDist = d
+                            closestIdx = i
+                        end
+                    end
+                end
+            end
+            
+            -- 1. เช็คจาก UI ของเกม (Teleport Menu) เพื่อความแม่นยำ 100%
+            local uiMaxIndex = 0
+            if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                    if obj:IsA("TextLabel") and obj.Text ~= "" then
+                        local textLower = string.lower(obj.Text)
+                        for i, mapName in ipairs(MapOrderList) do
+                            -- ตรวจสอบว่า TextLabel นี้มีชื่อด่านอยู่หรือไม่ (เช่น "4. Pirate Island")
+                            if string.find(textLower, string.lower(mapName)) then
+                                local parent = obj.Parent
+                                if parent then
+                                    local isUnlocked = false
+                                    local isLocked = false
+                                    
+                                    -- ตรวจสอบเฉพาะในกรอบ (Frame) ของด่านนั้นๆ ป้องกันการเผลอไปอ่านปุ่มของด่านอื่น
+                                    for _, sibling in ipairs(parent:GetChildren()) do
+                                        if sibling:IsA("TextButton") and string.find(string.lower(sibling.Text), "teleport") then
+                                            isUnlocked = true
+                                        end
+                                        if sibling:IsA("TextLabel") and string.find(string.lower(sibling.Text), "haven't unlocked") then
+                                            isLocked = true
+                                        end
+                                        -- ตรวจสอบลูกๆ ของ sibling ด้วยเผื่อปุ่มซ้อนอยู่
+                                        for _, desc in ipairs(sibling:GetDescendants()) do
+                                            if desc:IsA("TextButton") and string.find(string.lower(desc.Text), "teleport") then
+                                                isUnlocked = true
+                                            end
+                                            if desc:IsA("TextLabel") and string.find(string.lower(desc.Text), "haven't unlocked") then
+                                                isLocked = true
+                                            end
+                                        end
+                                    end
+                                    
+                                    -- ถ้ามีปุ่ม Teleport และไม่มีคำว่า Lock แปลว่าด่านนี้ปลดล็อคแล้วชัวร์ๆ
+                                    if isUnlocked and not isLocked then
+                                        if i > uiMaxIndex then
+                                            uiMaxIndex = i
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if uiMaxIndex > _G.HighestUnlockedMapIndex then
+                _G.HighestUnlockedMapIndex = uiMaxIndex
+            end
+            
+            -- 2. เช็คจากจุดที่ตัวละครยืนอยู่จริงๆ
+            if closestIdx > _G.HighestUnlockedMapIndex then
+                _G.HighestUnlockedMapIndex = closestIdx
+            end
+        end
+    end)
+    
+    return MapOrderList[_G.HighestUnlockedMapIndex] or "Leveling City"
+end
+
+-- Data from game dumps
+local QuestData = {
+    ["Pirate Island"] = {Module = "PirateIsland", Npc = "PirateQuest", Monsters = {"Kaku", "Shiriu", "Rob", "Figarlend", "Buggi"}},
+    ["Blacksmiths Village"] = {Module = "BlacksmithsVillage", Npc = "BlacksmithsQuest", Monsters = {"Enmo", "Ruih", "Hantego", "Dhoma", "Kokoshibo"}},
+    ["Planet Of Warriors"] = {Module = "PlanetOfWarriors", Npc = "WarriorsQuest", Monsters = {"Gran", "Boo", "GokoBlack", "Frieza", "Broli"}},
+    ["Leveling City"] = {Module = "LevelingCity", Npc = "LevelingQuest", Monsters = {"MaceGuardian", "AxeGuardian", "SwordGuardian", "SingerGuardian", "BigGuardian"}},
+    ["Tower City"] = {Module = "TowerCity", Npc = "TowerQuest", Monsters = {"Haribol", "Coyoti", "Yhwache", "Grimmjew", "Ichegi"}}
+}
+
+_G.SelectedQuestKey = "Best ( Map )"
+_G.SelectedMonster = "Best ( Quest )"
+
+local MonsterDropdown = Tab_Autofarm:CreateDropdown({
+    Name = "Select Monster (Target)",
+    Options = {"Best ( Quest )", "Kaku", "Shiriu", "Rob", "Figarlend", "Buggi"},
+    CurrentOption = {"Best ( Quest )"},
+    MultipleOptions = false,
+    Flag = "MonsterSelect", 
+    Callback = function(Option)
+        _G.SelectedMonster = type(Option) == "table" and Option[1] or Option
+    end,
+})
+
+local MapDropdown = Tab_Autofarm:CreateDropdown({
+    Name = "Select Quest Map",
+    Options = {"Best ( Map )", "Pirate Island", "Blacksmiths Village", "Planet Of Warriors", "Leveling City", "Tower City"},
+    CurrentOption = {"Best ( Map )"},
+    MultipleOptions = false,
+    Flag = "QuestSelect", 
+    Callback = function(Option)
+        _G.SelectedQuestKey = type(Option) == "table" and Option[1] or Option
+        
+        -- ทิ้งเควสเก่าทุกครั้งที่เปลี่ยนแมพ ป้องกันบัครับเควสซ้อน
+        pcall(function()
+            local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+            Bridge:FireServer("General", "Quest", "Abandon")
+            
+            -- วาร์ปไปยังแมพที่เลือกทันที! (ดึงชื่อ Module จาก QuestData)
+            local targetKey = _G.SelectedQuestKey
+            if targetKey == "Best ( Map )" then
+                targetKey = GetBestMap()
+            end
+            local qData = QuestData[targetKey]
+            if qData and qData.Module then
+                Bridge:FireServer("General", "Portal", "Teleport", qData.Module)
+            end
+        end)
+        
+        -- Build dropdown options with Best ( Quest ) at the top
+        local opts = {"Best ( Quest )"}
+        local mapKey = _G.SelectedQuestKey == "Best ( Map )" and GetBestMap() or _G.SelectedQuestKey
+        if QuestData[mapKey] then
+            for _, m in ipairs(QuestData[mapKey].Monsters) do
+                table.insert(opts, m)
+            end
+        end
+        
+        -- เก็บค่าเดิมไว้ป้องกันปัญหาตอน Load Config
+        local oldMonster = _G.SelectedMonster
+        
+        MonsterDropdown:Refresh(opts, {"Best ( Quest )"})
+        
+        -- ถ้าค่าเดิมมีในตัวเลือกของแมพนี้ ให้ใช้ค่าเดิม
+        local foundOld = false
+        for _, o in ipairs(opts) do
+            if o == oldMonster then
+                foundOld = true
+                break
+            end
+        end
+        
+        if foundOld then
+            _G.SelectedMonster = oldMonster
+            MonsterDropdown:Set({oldMonster})
+        else
+            _G.SelectedMonster = "Best ( Quest )"
+            MonsterDropdown:Set({"Best ( Quest )"})
+        end
+    end,
+})
+
+local AutoQuestToggle = Tab_Autofarm:CreateToggle({
+    Name = "Auto Quest & Farm",
+    CurrentValue = false,
+    Flag = "Toggle_AutoQuestFarm",
+    Callback = function(Value)
+        _G.AutoQuestFarm = Value
+        
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        while _G.AutoQuestFarm do
+            task.wait(0.1) -- Fast loop for smooth farming
+            
+            if _G.AutoTrial and _G.IsTrialActive then
+                -- หยุด Auto Quest ชั่วคราวเมื่อใกล้ถึงเวลาหรือกำลังลง Trial (ป้องกันสคริปต์ตีกัน)
+                continue
+            end
+            
+            local activeMapKey = _G.SelectedQuestKey
+            if activeMapKey == "Best ( Map )" then
+                activeMapKey = GetBestMap()
+            end
+            
+            local qData = QuestData[activeMapKey]
+            if not qData then continue end
+            
+            local moduleName = qData.Module
+            local npcName = qData.Npc
+            
+            -- ตรวจสอบว่าหลุดอยู่หน้า Lobby หรือเปล่า (เช่น เพิ่งออกมาจาก Trial)
+            local inLobby = false
+            pcall(function()
+                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                    local Main = require(ps.Scripts.Client.Main)
+                    if Main and Main.Player and Main.Player:GetAttribute("Mode") == "Lobby" then
+                        inLobby = true
+                    end
+                end
+            end)
+            
+            -- Fallback Lobby Check แบบปลอดภัย (แก้บัค Model Position)
+            if not inLobby and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                pcall(function()
+                    local trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                    if trialDoor then
+                        local tp
+                        if trialDoor:IsA("Model") then
+                            tp = trialDoor.PrimaryPart and trialDoor.PrimaryPart.Position or trialDoor:GetPivot().Position
+                        else
+                            tp = trialDoor.Position
+                        end
+                        if tp and (LocalPlayer.Character.HumanoidRootPart.Position - tp).Magnitude < 2000 then
+                            inLobby = true
+                        end
+                    end
+                end)
+            end
+            
+            if inLobby then
+                pcall(function()
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and fireproximityprompt then
+                        local entered = false
+                        for _, v in ipairs(workspace:GetDescendants()) do
+                            if v:IsA("Model") or v:IsA("BasePart") then
+                                if v.Name == moduleName or string.match(v.Name, moduleName) then
+                                    local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if prompt then
+                                        hrp.CFrame = v:IsA("Model") and v:GetPivot() or v.CFrame
+                                        task.wait(0.3)
+                                        fireproximityprompt(prompt)
+                                        entered = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                        -- ถ้าหาประตูไม่เจอ ค่อยลองใช้ Remote (ระวังบัคดึงกลับ Lobby)
+                        if not entered then
+                            Bridge:FireServer("General", "Portal", "Teleport", moduleName)
+                        end
+                    end
+                end)
+                task.wait(3) -- รอแมพโหลด
+                continue
+            end
+            
+            
+
+            
+            -- ดึงข้อมูล Main แบบปลอดภัย ป้องกันสคริปต์ค้าง (Yield)
+            local Main = nil
+            pcall(function()
+                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                if ps then
+                    local s = ps:FindFirstChild("Scripts")
+                    if s then
+                        local c = s:FindFirstChild("Client")
+                        if c then
+                            local m = c:FindFirstChild("Main")
+                            if m then
+                                Main = require(m)
+                            end
+                        end
+                    end
+                end
+            end)
+            
+            local hasQuest = false
+            
+            -- พึ่งพาระบบเช็คจากหน้าจอเสริมเป็นหลัก (ป้องกันบัครับเควสซ้อน/ค้าง)
+            pcall(function()
+                if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                    for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                        if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
+                            local isVisible = true
+                            local parent = obj
+                            while parent and parent:IsA("GuiObject") do
+                                if not parent.Visible then
+                                    isVisible = false
+                                    break
+                                end
+                                parent = parent.Parent
+                            end
+                            
+                            if isVisible then
+                                local cleanText = string.gsub(obj.Text, "<[^>]+>", "")
+                                local m, curr, max = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
+                                if m and curr and max then
+                                    if tonumber(curr) < tonumber(max) then
+                                        hasQuest = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            
+            -- ถ้ายังไม่มีเควสต์ ให้ยิงรับเควสต์ของแมพนั้นทันที (ใช้ระบบดั้งเดิมที่เคยทำงานได้ 100%)
+            if not hasQuest then
+                pcall(function()
+                    -- ระบบเดิมที่เคยรับเควสต์ Tower City ได้สำเร็จ
+                    Bridge:FireServer("General", "Quest", "Accept", moduleName)
+                end)
+                
+                task.wait(1.5) -- รอเซิร์ฟเวอร์อัปเดต Data
+                
+                local hasQuestAfter = false
+                pcall(function()
+                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                            if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
+                                local cleanText = string.gsub(obj.Text, "<[^>]+>", "")
+                                local m, curr, max = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
+                                if m and curr and max and tonumber(curr) < tonumber(max) then
+                                    local isVisible = true
+                                    local parent = obj
+                                    while parent and parent:IsA("GuiObject") do
+                                        if not parent.Visible then isVisible = false break end
+                                        parent = parent.Parent
+                                    end
+                                    if isVisible then hasQuestAfter = true break end
+                                end
+                            end
+                        end
+                    end
+                end)
+                
+                if _G.SelectedMonster == "Best ( Quest )" then
+                    _G.IsCurrentMapFinished = not hasQuestAfter
+                else
+                    _G.IsCurrentMapFinished = false
+                end
+            else
+                _G.IsCurrentMapFinished = false
+            end
+            
+            -- 2. ค้นหามอนสเตอร์เป้าหมาย
+            local targetMonsterName = _G.SelectedMonster
+            
+            -- 🌟 ระบบ Best ( Quest ) (หาตัวที่ยังตีไม่ครบ)
+            if targetMonsterName == "Best ( Quest )" then
+                local guiTarget = nil
+                pcall(function()
+                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                        local questObjectives = {}
+                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                                local text = obj.Text
+                                -- ลบ RichText tags ออกก่อนเพื่อความชัวร์
+                                local cleanText = string.gsub(text, "<[^>]+>", "")
+                                -- Match: Defeat 30 Mace Guardian (30/30) หรือ [30/30]
+                                local monsterName, currentStr, maxStr = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
+                                
+                                if monsterName and currentStr and maxStr then
+                                    local current = tonumber(currentStr)
+                                    local max = tonumber(maxStr)
+                                    
+                                    if current and max and current < max then
+                                        local yPos = obj.AbsolutePosition and obj.AbsolutePosition.Y or 0
+                                        table.insert(questObjectives, {
+                                            Monster = string.gsub(monsterName, "^%s*(.-)%s*$", "%1"),
+                                            Y = yPos,
+                                            Obj = obj
+                                        })
+                                    end
+                                end
+                            end
+                        end
+                        
+                        if #questObjectives > 0 then
+                            -- กรองเอาเฉพาะอันที่ Visible จริงๆ
+                            local visibleObjectives = {}
+                            for _, q in ipairs(questObjectives) do
+                                local isVisible = true
+                                local parent = q.Obj
+                                while parent and parent:IsA("GuiObject") do
+                                    if not parent.Visible then
+                                        isVisible = false
+                                        break
+                                    end
+                                    parent = parent.Parent
+                                end
+                                if isVisible then
+                                    table.insert(visibleObjectives, q)
+                                end
+                            end
+                            
+                            if #visibleObjectives == 0 then
+                                visibleObjectives = questObjectives
+                            end
+                            
+                            -- เรียงจากบนลงล่างตามตำแหน่ง Y
+                            table.sort(visibleObjectives, function(a, b) return a.Y < b.Y end)
+                            guiTarget = visibleObjectives[1].Monster
+                        end
+                    end
+                end)
+                
+                if guiTarget then
+                    targetMonsterName = guiTarget
+                else
+                    -- ถ้าหาจากหน้าจอ GUI ไม่เจอ ให้ใช้ระบบสำรอง (ดึงจาก Data)
+                    if hasQuest then
+                        targetMonsterName = nil
+                        pcall(function()
+                            local SharedQuest = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Quests"):WaitForChild(moduleName))
+                            local sortedList = {}
+                            for key, val in pairs(SharedQuest.List) do
+                                table.insert(sortedList, {key = key, data = val})
+                            end
+                            table.sort(sortedList, function(a, b) return a.key < b.key end)
+                            
+                            for _, item in ipairs(sortedList) do
+                                local key = item.key
+                                local v = item.data
+                                local rawData = Main.Data.Quest.List[v.Target] or Main.Data.Quest.List[string.gsub(v.Target, " ", "")] or Main.Data.Quest.List[key]
+                                local killed = 0
+                                if type(rawData) == "number" then killed = rawData
+                                elseif type(rawData) == "table" then killed = rawData.Amount or rawData.Progress or rawData.Value or 0 end
+                                
+                                if killed < v.Amount then
+                                    targetMonsterName = v.Target
+                                    break
+                                end
+                            end
+                        end)
+                    else
+                        targetMonsterName = qData.Monsters[1]
+                    end
+                end
+            end
+            
+            if targetMonsterName and targetMonsterName ~= "Auto Progress" then
+                local targetMonster = nil
+                local shortestDistance = math.huge
+                
+                -- ค้นหามอนสเตอร์ทั้งหมดใน Workspace
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    -- ตัดช่องว่างออกจากชื่อก่อนเทียบ ป้องกันปัญหาเช่น Target="AxeGuardian" แต่ Model="Axe Guardian"
+                    local cleanObjName = string.gsub(obj.Name, " ", "")
+                    local cleanTargetName = string.gsub(targetMonsterName, " ", "")
+                    
+                    if cleanObjName == cleanTargetName and obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") and obj:FindFirstChild("Humanoid") then
+                        -- ตรวจสอบว่ายังมีชีวิตอยู่จริงไหม (กันเกมใช้ระบบเลือด Custom แล้วศพยังมี Health > 0)
+                        local isAlive = obj.Humanoid.Health > 0
+                        
+                        -- เช็คระบบเลือดแยกจาก Attribute
+                        if obj:GetAttribute("Health") ~= nil and obj:GetAttribute("Health") <= 0 then
+                            isAlive = false
+                        end
+                        -- เช็คสถานะการตายจาก Attribute
+                        if obj:GetAttribute("Dead") == true or obj:GetAttribute("Died") == true or obj:GetAttribute("IsDead") == true then
+                            isAlive = false
+                        end
+                        -- เช็คสถานะจาก Humanoid โดยตรง
+                        if obj.Humanoid:GetState() == Enum.HumanoidStateType.Dead then
+                            isAlive = false
+                        end
+                        
+                        if isAlive then
+                            -- หามอนสเตอร์ที่ใกล้ที่สุด
+                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.HumanoidRootPart.Position).Magnitude
+                                if dist < shortestDistance then
+                                    shortestDistance = dist
+                                    targetMonster = obj
+                                end
+                            else
+                                targetMonster = obj
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                -- 3. ถ้าเจอมอนสเตอร์ ให้วาร์ปไปตี
+                if targetMonster then
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = LocalPlayer.Character.HumanoidRootPart
+                        local dist = (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude
+                        
+                        if dist > 3000 then
+                            -- แมพอยู่ไกลมาก ให้ใช้ระบบเทเลพอร์ตข้ามเกาะแทน
+                            pcall(function()
+                                Bridge:FireServer("General", "Portal", "Teleport", moduleName)
+                            end)
+                            task.wait(1.5)
+                        else
+                            -- เปลี่ยน CFrame ครั้งเดียวเมื่อเปลี่ยนเป้าหมาย เพื่อให้ตัวละครยืนนิ่งๆ ไม่กระตุก
+                            if _G.CurrentQuestTarget ~= targetMonster then
+                                _G.CurrentQuestTarget = targetMonster
+                                hrp.CFrame = targetMonster.HumanoidRootPart.CFrame * CFrame.new(0, 3, 4)
+                            end
+                            
+                            -- เซ็ตความเร็วเป็น 0 เพื่อป้องกันอาการตกหล่นหรือลื่น
+                            hrp.Velocity = Vector3.new(0, 0, 0)
+                            
+                            -- ยิงคำสั่งโจมตีรัวๆ
+                            pcall(function()
+                                Bridge:FireServer("Fighters", "Click", "Damage")
+                            end)
+                        end
+                    end
+                else
+                    -- ถ้าหามอนไม่เจอ (แมพอาจจะยังโหลดไม่เสร็จ หรือรอเกิด) ให้รออย่างเดียว ห้ามวาร์ปมั่ว
+                    task.wait(1)
+                end
+            end
+        end
+    end,
+})
+
+local function parseCoins(val)
+    if type(val) == "number" then return val end
+    local str = tostring(val)
+    str = string.gsub(str, ",", "")
+    local numStr = string.match(str, "^[%d%.]+")
+    if not numStr then return 0 end
+    local num = tonumber(numStr) or 0
+    local upperStr = string.upper(str)
+    if string.match(upperStr, "K") then num = num * 1000 
+    elseif string.match(upperStr, "M") then num = num * 1000000
+    elseif string.match(upperStr, "B") then num = num * 1000000000 end
+    return num
+end
+
+Tab_Autofarm:CreateToggle({
+    Name = "Auto Next Map",
+    CurrentValue = false,
+    Flag = "Toggle_AutoNextMap",
+    Callback = function(Value)
+        _G.AutoNextMap = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        while _G.AutoNextMap do
+            task.wait(1)
+            
+            pcall(function()
+                -- ถ้าด่านปัจจุบันยังไม่เคลียร์ หรือไม่ได้เปิด AutoQuest อยู่ ก็ไม่ต้องทำอะไร
+                if not _G.AutoQuestFarm or not _G.IsCurrentMapFinished then return end
+                
+                local activeMapKey = _G.SelectedQuestKey
+                if activeMapKey == "Best ( Map )" then
+                    activeMapKey = GetBestMap()
+                end
+                
+                -- หา Index ของแมพปัจจุบัน
+                local currentIndex = 0
+                for i, mapName in ipairs(MapOrderList) do
+                    if mapName == activeMapKey then
+                        currentIndex = i
+                        break
+                    end
+                end
+                
+                -- ถ้าไม่ใช่แมพสุดท้าย (ยังมีแมพถัดไป)
+                if currentIndex > 0 and currentIndex < #MapOrderList then
+                    local nextMapName = MapOrderList[currentIndex + 1]
+                    local nextMapCost = MapUnlockCost[nextMapName] or math.huge
+                    
+                    -- เช็คเงิน (Coins) พร้อมระบบกรองตัวอักษรและลูกน้ำ
+                    local myCoins = 0
+
+                    if LocalPlayer:FindFirstChild("leaderstats") then
+                        local c = LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("💰 Coins") or LocalPlayer.leaderstats:FindFirstChild("Yen")
+                        if c then
+                            myCoins = parseCoins(c.Value)
+                        else
+                            for _, stat in ipairs(LocalPlayer.leaderstats:GetChildren()) do
+                                if string.match(stat.Name, "Coins") or string.match(stat.Name, "Yen") then
+                                    myCoins = parseCoins(stat.Value)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    
+                    if myCoins >= nextMapCost then
+                        local moduleName = nextMapName
+                        if QuestData and QuestData[nextMapName] and QuestData[nextMapName].Module then
+                            moduleName = QuestData[nextMapName].Module
+                        end
+                        
+                        -- ซื้อแมพถัดไป (ลองหลายๆ รูปแบบเพื่อความชัวร์ รวมถึงชื่อ Module)
+                        Bridge:FireServer("General", "Portal", "Unlock", moduleName)
+                        Bridge:FireServer("General", "Portal", "Buy", moduleName)
+                        Bridge:FireServer("General", "Portal", "Unlock", nextMapName)
+                        
+                        -- วาร์ปไปกด ProximityPrompt ที่ประตูโดยตรง (ถ้ามี)
+                        pcall(function()
+                            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp and fireproximityprompt then
+                                for _, v in ipairs(workspace:GetDescendants()) do
+                                    if v.Name == moduleName or v.Name == nextMapName or string.match(v.Name, moduleName) then
+                                        local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                        if prompt then
+                                            local oldPos = hrp.CFrame
+                                            hrp.CFrame = v:IsA("Model") and v:GetPivot() or v.CFrame
+                                            task.wait(0.3)
+                                            fireproximityprompt(prompt)
+                                            task.wait(0.3)
+                                            hrp.CFrame = oldPos
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        
+                        task.wait(1.5)
+                        
+                        -- เปลี่ยนตัวเลือกเป้าหมายไปแมพใหม่
+                        _G.SelectedQuestKey = nextMapName
+                        if MapDropdown then
+                            MapDropdown:Set({nextMapName})
+                        end
+                        
+                        -- รีเซ็ตสถานะว่าเคลียร์ด่านแล้ว เพื่อให้ AutoQuest ทำงานกับด่านใหม่
+                        _G.IsCurrentMapFinished = false
+                    end
+                end
+            end)
+        end
+    end,
+})
+
+local Section_Trial = Tab_Trial:CreateSection("Trial Settings")
+
+Tab_Trial:CreateSlider({
+    Name = "Max Trial Wave",
+    Range = {0, 100},
+    Increment = 1,
+    Suffix = "Wave (0 = Unlimited)",
+    CurrentValue = 0,
+    Flag = "Slider_MaxTrialWave",
+    Callback = function(Value)
+        _G.MaxTrialWave = Value
+    end,
+})
+
+local AutoTrialToggle = Tab_Trial:CreateToggle({
+    Name = "Auto Farm Trial",
+    CurrentValue = false,
+    Flag = "Toggle_AutoTrial",
+    Callback = function(Value)
+        _G.AutoTrial = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        -- ตัวแปรเก็บประวัติการลง Trial เพื่อไม่ให้ลงซ้ำในรอบเวลาเดิม
+        _G.LastTrialCompletedHour = _G.LastTrialCompletedHour or -1
+        _G.LastTrialCompletedHalf = _G.LastTrialCompletedHalf or -1
+        _G.HasJoinedTrialLobby = false
+        
+        while _G.AutoTrial do
+            task.wait(1)
+            
+            local inTrialMode = false
+            pcall(function()
+                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                    local Main = require(ps.Scripts.Client.Main)
+                    if Main and Main.Player then
+                        local mode = Main.Player:GetAttribute("Mode")
+                        if mode and (string.find(string.lower(mode), "trial") or string.find(string.lower(mode), "gamemode")) then
+                            inTrialMode = true
+                        end
+                        if mode == "Lobby" or mode == "Town" then
+                            _G.InTrialFlag = false
+                        end
+                    end
+                end
+            end)
+            
+            if _G.InTrialFlag then
+                inTrialMode = true
+                -- ตรวจสอบว่าถ้ากลับมาอยู่หน้าประตูแล้ว (ตาย/จบรอบ) ให้ยกเลิก Flag
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    pcall(function()
+                        local trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                        if not trialDoor then
+                            trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
+                        end
+                        if trialDoor then
+                            local targetPos
+                            if trialDoor:IsA("Model") then
+                                targetPos = trialDoor.PrimaryPart and trialDoor.PrimaryPart.Position or trialDoor:GetPivot().Position
+                            else
+                                targetPos = trialDoor.Position
+                            end
+                            
+                            if targetPos and (hrp.Position - targetPos).Magnitude < 100 then
+                                inTrialMode = false
+                                _G.InTrialFlag = false
+                            end
+                        end
+                    end)
+                end
+            end
+            
+            local currentTime = os.date("*t")
+            local min = currentTime.min
+            local hour = currentTime.hour
+            
+            -- ช่วงเวลาที่ดันเจี้ยนเปิดคือต้นชั่วโมง (XX:00) และครึ่งชั่วโมง (XX:30)
+            -- เราจะดักรอช่วง XX:58 ถึง XX:03 และ XX:28 ถึง XX:33
+            local isTrialWindow = false
+            local currentHalf = 0
+            
+            if min >= 0 and min <= 3 then
+                isTrialWindow = true
+                currentHalf = 0
+            elseif min >= 30 and min <= 33 then
+                isTrialWindow = true
+                currentHalf = 1
+            end
+            
+            local alreadyCompleted = (_G.LastTrialCompletedHour == hour and _G.LastTrialCompletedHalf == currentHalf)
+            
+            _G.IsTrialActive = inTrialMode or (isTrialWindow and not alreadyCompleted)
+            
+            if not inTrialMode then
+                if isTrialWindow and not alreadyCompleted then
+                    -- 1. ยังไม่ได้ลงรอบนี้ และถึงเวลาแล้ว -> วาร์ปไปเตรียมตัวที่ Lobby
+                    local trialDoor = nil
+                    pcall(function()
+                        trialDoor = workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                        if not trialDoor then
+                            trialDoor = workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
+                        end
+                    end)
+                    
+                    if not trialDoor then
+                        if not _G.HasJoinedTrialLobby then
+                            local inLobby = false
+                            pcall(function()
+                                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                                    local Main = require(ps.Scripts.Client.Main)
+                                    if Main and Main.Player and Main.Player:GetAttribute("Mode") == "Lobby" then
+                                        inLobby = true
+                                    end
+                                end
+                            end)
+                            
+                            -- Fallback Lobby Check: If Trial_Join has loaded parts, we are in the Lobby
+                            if not inLobby then
+                                local td = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                                if td and td:FindFirstChildWhichIsA("BasePart", true) then
+                                    inLobby = true
+                                end
+                            end
+                            
+                            if not inLobby then
+                                pcall(function()
+                                    Bridge:FireServer("General", "Portal", "Teleport", "Lobby")
+                                end)
+                                task.wait(3)
+                            else
+                                -- Already in Lobby, just wait for the door to spawn at XX:00
+                                task.wait(1)
+                            end
+                        end
+                    else
+                        -- เจอประตู Trial แล้ว (เวลา XX:00)
+                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local part = trialDoor:FindFirstChildWhichIsA("BasePart", true)
+                            if part then
+                                local targetPos = part.Position
+                                local targetCFrame = part.CFrame
+                                
+                                -- เทเลพอร์ตไปใกล้ๆ ประตูเฉพาะตอนที่อยู่ไกล
+                                local dist = (hrp.Position - targetPos).Magnitude
+                                if dist > 15 then
+                                    hrp.CFrame = targetCFrame * CFrame.new(0, 5, 0)
+                                    hrp.Velocity = Vector3.new(0,0,0)
+                                    task.wait(0.5)
+                                end
+                            end
+                            
+                            -- ยิงคำสั่งเข้า Trial รัวๆ ทุก 2 วินาที จนกว่าจะโดนดึงเข้าห้อง (inTrialMode จะกลายเป็น true และหยุดลูปนี้เอง)
+                            pcall(function()
+                                local prompt = trialDoor:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt and fireproximityprompt then
+                                    fireproximityprompt(prompt)
+                                end
+                                Bridge:FireServer("Gamemodes", "Trial", "Join")
+                                _G.InTrialFlag = true -- ตั้งค่าว่าเข้าไปใน Trial แล้ว
+                                
+                                local confirmUI = LocalPlayer.PlayerGui:FindFirstChild("Confirmation")
+                                if confirmUI and confirmUI.Enabled then
+                                    confirmUI.Enabled = false
+                                end
+                            end)
+                            
+                            task.wait(2)
+                        end
+                    end
+                else
+                    if _G.WasInTrial then
+                        _G.WasInTrial = false
+                        _G.HasJoinedTrialLobby = false
+                        if _G.SelectedQuestKey then
+                            local qData = QuestData[_G.SelectedQuestKey]
+                            if qData then
+                                pcall(function()
+                                    Bridge:FireServer("General", "Portal", "Teleport", qData.Module)
+                                end)
+                                task.wait(3)
+                            end
+                        end
+                    end
+                end
+            else
+                _G.WasInTrial = true
+                _G.HasJoinedTrialLobby = false
+                
+                -- ประทับตราว่าลงสำเร็จแล้วตั้งแต่เริ่มเข้าเลย ป้องกันบัคเข้าซ้ำ
+                _G.LastTrialCompletedHour = hour
+                _G.LastTrialCompletedHalf = currentHalf
+                
+                local currentWave = 1
+                pcall(function()
+                    local rsTrial = game:GetService("ReplicatedStorage"):FindFirstChild("Gamemodes")
+                    if rsTrial and rsTrial:FindFirstChild("Trial") and rsTrial.Trial:FindFirstChild("Wave") then
+                        currentWave = tonumber(rsTrial.Trial.Wave.Value) or currentWave
+                    end
+                end)
+                
+                local maxWave = _G.MaxTrialWave or 999
+                if maxWave <= 0 then maxWave = 999 end
+                
+                if currentWave > maxWave then
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        -- 1. พยายามยิง Remote ออกจากดันเจี้ยน (ลองหลายชื่อเผื่อเกมเปลี่ยน)
+                        pcall(function()
+                            Bridge:FireServer("Gamemodes", "Trial", "Leave")
+                            Bridge:FireServer("Gamemodes", "Trial", "Claim")
+                            Bridge:FireServer("Gamemodes", "Trial", "Exit")
+                        end)
+                        
+                        -- 2. พยายามกดปุ่ม UI เผื่อ Remote ไม่ทำงาน (ปัญหาที่คุณบอกว่ามันไม่ได้กด UI)
+                        pcall(function()
+                            if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                                    if obj:IsA("TextButton") and obj.Text ~= "" then
+                                        local lowerText = string.lower(obj.Text)
+                                        if string.find(lowerText, "leave") or string.find(lowerText, "claim") or string.find(lowerText, "exit") or string.find(lowerText, "continue") then
+                                            -- เช็คว่า UI มองเห็นอยู่ไหม
+                                            local isVisible = true
+                                            local parent = obj
+                                            while parent and parent:IsA("GuiObject") do
+                                                if not parent.Visible then isVisible = false break end
+                                                parent = parent.Parent
+                                            end
+                                            
+                                            if isVisible and getconnections then
+                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
+                                                    conn:Fire()
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        
+                        task.wait(1.5)
+                        
+                        -- บังคับวาร์ปกลับจุดฟาร์มปัจจุบัน หรือเมืองแรก (LevelingCity)
+                        pcall(function()
+                            local targetMap = _G.SelectedQuestKey
+                            if targetMap == "Best ( Map )" then
+                                targetMap = GetBestMap()
+                            end
+                            targetMap = targetMap or "LevelingCity"
+                            
+                            local qData = QuestData[targetMap]
+                            if qData and qData.Module then
+                                Bridge:FireServer("General", "Portal", "Teleport", qData.Module)
+                            else
+                                Bridge:FireServer("General", "Portal", "Teleport", "LevelingCity")
+                            end
+                        end)
+                        
+                        task.wait(2)
+                        
+                        -- เคลียร์สถานะดันเจี้ยน
+                        _G.WasInTrial = true
+                        _G.HasJoinedTrialLobby = false
+                        -- ห้ามใช้ break ตรงนี้เด็ดขาด เพราะจะทำให้ระบบ Auto Trial พังและปิดตัวเองไปเลย
+                    end
+                    continue
+                end
+                
+                local trialFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
+                local trialEnemiesFolder = trialFolder and trialFolder:FindFirstChild("Enemies")
+                
+                if trialEnemiesFolder then
+                    local targetEnemy = nil
+                    local targetHRP = nil
+                    local shortestDistance = math.huge
+                    local playerHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    
+                    for _, v in ipairs(trialEnemiesFolder:GetChildren()) do
+                        local eHRP = (v:IsA("Model") and v:FindFirstChild("HumanoidRootPart")) or (v:IsA("BasePart") and v)
+                        
+                        local isAlive = true
+                        if v:IsA("Model") and v:FindFirstChild("Humanoid") then
+                            isAlive = v.Humanoid.Health > 0
+                            if v.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
+                        end
+                        if v:GetAttribute("Health") ~= nil and v:GetAttribute("Health") <= 0 then isAlive = false end
+                        if v:GetAttribute("Dead") == true or v:GetAttribute("Died") == true or v:GetAttribute("IsDead") == true then isAlive = false end
+                        
+                        if eHRP and isAlive then
+                            if playerHRP then
+                                local dist = (playerHRP.Position - eHRP.Position).Magnitude
+                                if dist < shortestDistance then
+                                    shortestDistance = dist
+                                    targetEnemy = v
+                                    targetHRP = eHRP
+                                end
+                            else
+                                targetEnemy = v
+                                targetHRP = eHRP
+                                break
+                            end
+                        end
+                    end
+                    
+                    if targetEnemy and playerHRP then
+                        playerHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 7, 0)
+                        playerHRP.Velocity = Vector3.new(0, 0, 0)
+                        
+                        pcall(function()
+                            Bridge:FireServer("Fighters", "Click", "Damage")
+                        end)
+                    end
+                end
+            end
+        end
+    end,
+})
+
+local Section_Fighters = Tab_OpenStar:CreateSection("Fighter Management")
+
+Tab_OpenStar:CreateToggle({
+    Name = "Auto Equip Best (Every 1m)",
+    CurrentValue = false,
+    Flag = "Toggle_AutoEquipBest",
+    Callback = function(Value)
+        _G.AutoEquipBest = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoEquipBest then
+            task.spawn(function()
+                while _G.AutoEquipBest do
+                    pcall(function()
+                        Bridge:FireServer("Fighters", "Inventory", "EquipBest")
+                    end)
+                    task.wait(60) -- ทุกๆ 1 นาที
+                end
+            end)
+        end
+    end,
+})
+
+local RarityOptions = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Secret", "Exclusive"}
+
+Tab_OpenStar:CreateDropdown({
+    Name = "Select Rarities to Auto Lock",
+    Options = RarityOptions,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "Dropdown_AutoLock",
+    Callback = function(Options)
+        _G.SelectedAutoLock = Options
+    end,
+})
+
+Tab_OpenStar:CreateToggle({
+    Name = "Enable Auto Lock",
+    CurrentValue = false,
+    Flag = "Toggle_AutoLockFighters",
+    Callback = function(Value)
+        _G.AutoLockFighters = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoLockFighters then
+            task.spawn(function()
+                while _G.AutoLockFighters do
+                    task.wait(5)
+                    pcall(function()
+                        local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                        if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                            local Main = require(ps.Scripts.Client.Main)
+                            if Main and Main.Data and Main.Shared then
+                                local fightersData = Main.Data.Fighters or {}
+                                local sharedFighters = Main.Shared.Fighters or {}
+                                
+                                local toLock = {}
+                                local lockRarities = {}
+                                if _G.SelectedAutoLock then
+                                    for k, v in pairs(_G.SelectedAutoLock) do
+                                        if type(k) == "number" then 
+                                            lockRarities[v] = true
+                                        elseif type(k) == "string" and v == true then 
+                                            lockRarities[k] = true 
+                                        end
+                                    end
+                                end
+                                
+                                for uuid, fData in pairs(fightersData) do
+                                    local sData = sharedFighters[fData.Name]
+                                    if sData then
+                                        local rarity = sData.Rarity
+                                        local isLocked = fData.Locked
+                                        local isShiny = fData.Shiny or fData:GetAttribute("Shiny") or false
+                                        
+                                        -- ให้ล็อคตัว Shiny อัตโนมัติ หรือล็อคตาม Rarity
+                                        if (lockRarities[rarity] or isShiny) and not isLocked then
+                                            table.insert(toLock, uuid)
+                                        end
+                                    end
+                                end
+                                
+                                if #toLock > 0 then
+                                    for _, uuid in ipairs(toLock) do
+                                        Bridge:FireServer("Fighters", "Inventory", "Lock", uuid)
+                                        task.wait(0.1)
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                end
+            end)
+        end
+    end,
+})
+
+Tab_OpenStar:CreateDropdown({
+    Name = "Select Rarities to Auto Sell/Delete",
+    Options = RarityOptions,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "Dropdown_AutoDelete",
+    Callback = function(Options)
+        _G.SelectedAutoDelete = Options
+    end,
+})
+
+Tab_OpenStar:CreateToggle({
+    Name = "Enable Auto Sell/Delete",
+    CurrentValue = false,
+    Flag = "Toggle_AutoDeleteFighters",
+    Callback = function(Value)
+        _G.AutoDeleteFighters = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoDeleteFighters then
+            task.spawn(function()
+                while _G.AutoDeleteFighters do
+                    task.wait(5)
+                    pcall(function()
+                        local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                        if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                            local Main = require(ps.Scripts.Client.Main)
+                            if Main and Main.Data and Main.Shared then
+                                local fightersData = Main.Data.Fighters or {}
+                                local sharedFighters = Main.Shared.Fighters or {}
+                                
+                                local toDelete = {}
+                                local deleteRarities = {}
+                                if _G.SelectedAutoDelete then
+                                    for k, v in pairs(_G.SelectedAutoDelete) do
+                                        if type(k) == "number" then 
+                                            deleteRarities[v] = true
+                                        elseif type(k) == "string" and v == true then 
+                                            deleteRarities[k] = true 
+                                        end
+                                    end
+                                end
+                                
+                                -- Get locked rarities to prevent selling what we should lock
+                                local lockRarities = {}
+                                if _G.SelectedAutoLock then
+                                    for k, v in pairs(_G.SelectedAutoLock) do
+                                        if type(k) == "number" then 
+                                            lockRarities[v] = true
+                                        elseif type(k) == "string" and v == true then 
+                                            lockRarities[k] = true 
+                                        end
+                                    end
+                                end
+                                
+                                for uuid, fData in pairs(fightersData) do
+                                    local sData = sharedFighters[fData.Name]
+                                    if sData then
+                                        local rarity = sData.Rarity
+                                        local isLocked = fData.Locked
+                                        local isEquipped = Main.Data.Fighters_Equipped and Main.Data.Fighters_Equipped[uuid]
+                                        local isShiny = fData.Shiny or fData:GetAttribute("Shiny") or false
+                                        
+                                        -- ป้องกันการขายตัวที่อยู่ในคิวล็อก ตัวที่สมควรถูกล็อก และตัว Shiny (หายาก)
+                                        if deleteRarities[rarity] and not isLocked and not isEquipped and not isShiny then
+                                            if not lockRarities[rarity] then
+                                                table.insert(toDelete, uuid)
+                                            end
+                                        end
+                                    end
+                                end
+                                
+                                if #toDelete > 0 then
+                                    Bridge:FireServer("Fighters", "Inventory", "Delete", toDelete)
+                                end
+                            end
+                        end
+                    end)
+                end
+            end)
+        end
+    end,
+})
+
+-- ==========================================
+-- 🌟 AUTO GACHA TAB
+-- ==========================================
+local Section_Gacha = Tab_OpenStar:CreateSection("Summoning")
+
+Tab_OpenStar:CreateToggle({
+    Name = "Auto Open Star",
+    CurrentValue = false,
+    Flag = "Toggle_FastStar",
+    Callback = function(Value)
+        _G.FastAutoStar = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.FastAutoStar then
+            while _G.FastAutoStar do
+                task.wait(1)
+                pcall(function()
+                    -- ย้ำคำสั่งเปิด Auto ทุกๆ 1 วินาที เพื่อให้ทำงานต่อหลังจากที่กระเป๋าเต็มแล้วขายทิ้ง
+                    Bridge:FireServer("General", "Star", "Auto", true)
+                end)
+            end
+        else
+            -- ยกเลิกการเปิดออโต้
+            pcall(function()
+                Bridge:FireServer("General", "Star", "Auto", false)
+            end)
+        end
+    end,
+})
+
+
+
+-- ==========================================
+-- 🗺️ TELEPORT TAB
+-- ==========================================
+local Section_Islands = Tab_Teleport:CreateSection("Islands")
+
+local Islands = {
+    {"Lobby", "Lobby"},
+    {"Pirate Island", "PirateIsland"},
+    {"Blacksmiths Village", "BlacksmithsVillage"},
+    {"Planet Of Warriors", "PlanetOfWarriors"},
+    {"Leveling City", "LevelingCity"},
+    {"Tower City", "TowerCity"}
+}
+
+for i, island in ipairs(Islands) do
+    Tab_Teleport:CreateButton({
+        Name = "Teleport to " .. island[1],
+        Callback = function()
+            local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+            pcall(function()
+                Bridge:FireServer("General", "Portal", "Teleport", island[2])
+            end)
+        end,
+    })
+end
+
+-- ==========================================
+-- ==========================================
+-- ⚙️ BOOST TAB
+-- ==========================================
+local Section_Boost = Tab_Boost:CreateSection("Boost Settings")
+
+local BoostOptions = {
+    "Coins I", "Coins II", "Coins III",
+    "Damage I", "Damage II", "Damage III",
+    "Exp I", "Exp II", "Exp III",
+    "Luck", "Super Luck", "Ultra Luck",
+    "Star Speed"
+}
+
+-- จับคู่ชื่อที่แสดงใน UI กับ ID ในเกม
+local BoostIDs = {
+    ["Coins I"] = "CoinsI", ["Coins II"] = "CoinsII", ["Coins III"] = "CoinsIII",
+    ["Damage I"] = "DamageI", ["Damage II"] = "DamageII", ["Damage III"] = "DamageIII",
+    ["Exp I"] = "ExpI", ["Exp II"] = "ExpII", ["Exp III"] = "ExpIII",
+    ["Luck"] = "Luck", ["Super Luck"] = "SuperLuck", ["Ultra Luck"] = "UltraLuck",
+    ["Star Speed"] = "StarSpeed"
+}
+
+Tab_Boost:CreateDropdown({
+    Name = "Select Boosts to Auto Use",
+    Options = BoostOptions,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "Dropdown_Boosts",
+    Callback = function(Options)
+        _G.SelectedBoosts = Options
+    end,
+})
+
+Tab_Boost:CreateToggle({
+    Name = "Auto Use Boost",
+    CurrentValue = false,
+    Flag = "Toggle_AutoBoosts",
+    Callback = function(Value)
+        _G.AutoBoosts = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoBoosts then
+            task.spawn(function()
+                while _G.AutoBoosts do
+                    pcall(function()
+                        if _G.SelectedBoosts then
+                            for k, v in pairs(_G.SelectedBoosts) do
+                                local boostName
+                                if type(k) == "number" then
+                                    boostName = v
+                                elseif type(k) == "string" and v == true then
+                                    boostName = k
+                                end
+                                
+                                if boostName then
+                                    local boostId = BoostIDs[boostName]
+                                    if boostId then
+                                        -- เช็คว่าบัฟทำงานอยู่หรือไม่จาก UI ของเกม (แม่นยำ 100%)
+                                        local isActive = false
+                                        pcall(function()
+                                            local boostsUI = LocalPlayer.PlayerGui.UI.Frames.Stats.Frame.Boosts.Frame
+                                            if boostsUI:FindFirstChild(boostId) then
+                                                isActive = true
+                                            end
+                                        end)
+                                        
+                                        if not isActive then
+                                            -- ถ้าบัฟยังไม่ Active ให้กดใช้เลย! (ถ้าไม่มีของในตัว เซิร์ฟเวอร์จะบล็อกเอง)
+                                            Bridge:FireServer("General", "Inventory", "UseBoost", boostId)
+                                            task.wait(1) -- รอ 1 วินาทีให้ UI อัปเดตก่อนเช็คตัวถัดไป
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(3) -- เช็คซ้ำทุกๆ 3 วินาที
+                end
+            end)
+        end
+    end,
+})
+
+Tab_Misc:CreateToggle({
+    Name = "Auto Redeem Codes",
+    CurrentValue = false,
+    Flag = "Toggle_AutoCodes",
+    Callback = function(Value)
+        _G.AutoCodes = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        -- โค้ดทั้งหมดที่ใช้งานได้อัปเดตล่าสุด
+        local CodesList = {
+            "SHUTDOWN5", "UPDATE1", "3KPLAYERS", "500KVISITS", 
+            "MINIUPDATE", "2KLIKES", "2KPLAYERS", "RELEASE"
+        }
+        
+        if _G.AutoCodes then
+            task.spawn(function()
+                while _G.AutoCodes do
+                    pcall(function()
+                        for _, code in ipairs(CodesList) do
+                            Bridge:FireServer("General", "Codes", "Redeem", code)
+                            task.wait(0.5)
+                        end
+                    end)
+                    task.wait(60) -- เช็คซ้ำทุกๆ 1 นาที
+                end
+            end)
+        end
+    end,
+})
+
+Tab_Misc:CreateToggle({
+    Name = "Auto Claim Awards",
+    CurrentValue = false,
+    Flag = "Toggle_AutoAwards",
+    Callback = function(Value)
+        _G.AutoAwards = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoAwards then
+            task.spawn(function()
+                while _G.AutoAwards do
+                    pcall(function()
+                        local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                        if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                            local Main = require(ps.Scripts.Client.Main)
+                            if Main and Main.Shared and Main.Shared.Awards and Main.Data and Main.Data.Awards then
+                                local AwardsModule = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Awards"))
+                                for i, v in pairs(Main.Shared.Awards) do
+                                    local isClaimed = Main.Data.Awards[i]
+                                    if not isClaimed then
+                                        local _, _, prog = AwardsModule:GetProgress(Main.Data, v)
+                                        if prog and prog >= 1 then
+                                            Bridge:FireServer("General", "Awards", "Claim", i)
+                                            task.wait(0.2)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(5)
+                end
+            end)
+        end
+    end,
+})
+
+Tab_Misc:CreateToggle({
+    Name = "Auto Claim Inbox",
+    CurrentValue = false,
+    Flag = "Toggle_AutoInbox",
+    Callback = function(Value)
+        _G.AutoInbox = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoInbox then
+            task.spawn(function()
+                while _G.AutoInbox do
+                    pcall(function()
+                        local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                        if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                            local Main = require(ps.Scripts.Client.Main)
+                            if Main and Main.Data and Main.Data.Inbox then
+                                for i, _ in pairs(Main.Data.Inbox) do
+                                    Bridge:FireServer("General", "Inbox", "Claim", i)
+                                    task.wait(0.2)
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(5)
+                end
+            end)
+        end
+    end,
+})
+
+-- ==========================================
+-- ⚙️ PLAYER TAB
+-- ==========================================
+local Section_Movement = Tab_Player:CreateSection("Movement")
+
+Tab_Player:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 200},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "Slider_WalkSpeed",
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = Value
+        end
+    end,
+})
+
+Tab_Player:CreateSlider({
+    Name = "JumpPower",
+    Range = {50, 300},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 50,
+    Flag = "Slider_JumpPower",
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpPower = Value
+        end
+    end,
+})
+
+local Section_Misc = Tab_Misc:CreateSection("Misc")
+
+Tab_Misc:CreateToggle({
+    Name = "Anti-AFK",
+    CurrentValue = false,
+    Flag = "Toggle_AntiAFK",
+    Callback = function(Value)
+        _G.AntiAFK = Value
+        if _G.AntiAFK then
+            LocalPlayer.Idled:Connect(function()
+                if _G.AntiAFK then
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                end
+            end)
+            SKT_UI:Notify({
+                Title = "Anti-AFK Activated",
+                Content = "You will no longer be kicked for idling.",
+                Duration = 3,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
+-- ==========================================
+local Section_TrialMerchant = Tab_Trial:CreateSection("Trial Merchant Auto Buy")
+
+local TrialMerchantItems = {
+    "Coins I", "Stats Reroll", "Trait Reroll", 
+    "Star Speed", "Exp I", "Damage I", "Luck"
+}
+
+local TrialMerchantMapping = {
+    ["Trait Reroll"] = "Slot1",
+    ["Stats Reroll"] = "Slot2",
+    ["Coins I"] = "Slot3",
+    ["Damage I"] = "Slot4",
+    ["Exp I"] = "Slot5",
+    ["Luck"] = "Slot6",
+    ["Star Speed"] = "Slot7"
+}
+
+Tab_Trial:CreateDropdown({
+    Name = "Select Trial Merchant Items",
+    Options = TrialMerchantItems,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "Dropdown_TrialMerchant",
+    Callback = function(Options)
+        _G.SelectedTrialMerchantItems = Options
+    end,
+})
+
+Tab_Trial:CreateToggle({
+    Name = "Auto Buy Trial Merchant",
+    CurrentValue = false,
+    Flag = "Toggle_AutoTrialMerchant",
+    Callback = function(Value)
+        _G.AutoTrialMerchant = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        
+        if _G.AutoTrialMerchant then
+            task.spawn(function()
+                while _G.AutoTrialMerchant do
+                    pcall(function()
+                        if _G.SelectedTrialMerchantItems then
+                            for k, v in pairs(_G.SelectedTrialMerchantItems) do
+                                local itemName
+                                if type(k) == "number" then
+                                    itemName = v
+                                elseif type(k) == "string" and v == true then
+                                    itemName = k
+                                end
+                                
+                                if itemName and TrialMerchantMapping[itemName] then
+                                    Bridge:FireServer("General", "TrialMerchant", "Buy", TrialMerchantMapping[itemName])
+                                    task.wait(0.05) -- ปรับให้ซื้อไวขึ้นมากๆ (20 ชิ้นต่อวินาที)
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(1) -- เช็คซื้อทุกๆ 1 วินาที (เร็วขึ้น 5 เท่า)
+                end
+            end)
+        end
+    end,
+})
+
+Rayfield:LoadConfiguration()
