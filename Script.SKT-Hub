@@ -280,12 +280,12 @@ function SKT_UI:CreateWindow(options)
                 local goalPos = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
                 TweenService:Create(SwitchBg, TweenInfo.new(0.2), {BackgroundColor3 = goalBg}):Play()
                 TweenService:Create(SwitchKnob, TweenInfo.new(0.2), {Position = goalPos}):Play()
-                callback(state)
+                task.spawn(callback, state)
             end
             
             SwitchBg.MouseButton1Click:Connect(toggle)
             
-            if state then callback(state) end
+            if state then task.spawn(callback, state) end
         end
         
         function Tab:CreateSlider(opts)
@@ -335,7 +335,7 @@ function SKT_UI:CreateWindow(options)
                 Fill.Size = UDim2.new(pos, 0, 1, 0)
                 val = math.floor(min + (max - min) * pos)
                 Label.Text = sName .. " : " .. tostring(val) .. " " .. suffix
-                callback(val)
+                task.spawn(callback, val)
             end
             
             SliderBg.InputBegan:Connect(function(input)
@@ -354,6 +354,8 @@ function SKT_UI:CreateWindow(options)
                     update(input)
                 end
             end)
+            
+            task.spawn(callback, val)
         end
         
         function Tab:CreateDropdown(opts)
