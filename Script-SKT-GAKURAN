@@ -1,0 +1,897 @@
+--[[
+    SKT HUB — Ultimate PvP Bot v4
+    
+    ┌──────────────────────────────────────────────────────────────┐
+    │  STATE MACHINE:                                              │
+    │   IDLE → CHASE → ATTACK → PARRY → PUNISH → ATTACK → ...    │
+    │                                                              │
+    │  RULES:                                                      │
+    │  • DEFENSE FIRST: Parry ALWAYS takes priority over attack    │
+    │  • COMBAT TOGGLES: Independent Auto Parry & Auto Attack      │
+    │  • SMART SKIP: If parry window missed, wait for reset        │
+    │  • SKILL BLOCK: Detect enemy skills, block early             │
+    │  • INTERRUPT: Stop our own combo to parry incoming attack    │
+    └──────────────────────────────────────────────────────────────┘
+]]
+
+-- // SERVICES //
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+    LocalPlayer = Players.LocalPlayer
+end
+
+-- // COMBAT CONFIG (from CombatConfig.lua) //
+local PERFECT_BLOCK_WINDOW = 0.125
+local M1_ATTACK_DURATION   = 0.45
+local M1_COMBO_RESET       = 1.55
+local M1_RECOVERY_LOCKOUT  = 0.4
+local M2_COOLDOWN          = 7
+
+local STYLE_DATA = {
+    default    = { m1 = 0.32,  m2 = 0.30,  offsets = nil },
+    basic      = { m1 = 0.32,  m2 = 0.525, offsets = {0.02, 0.02, 0.02, 0.02} },
+    boxing     = { m1 = 0.32,  m2 = 0.43,  offsets = {0.02, 0.02, 0.02, 0.06} },
+    bulky      = { m1 = 0.32,  m2 = 0.43,  offsets = nil },
+    dirty      = { m1 = 0.32,  m2 = 0.30,  offsets = nil },
+    hakari     = { m1 = 0.28,  m2 = 0.59,  offsets = {0.16, 0.18, 0.16, 0.21} },
+    karate     = { m1 = 0.24,  m2 = 0.4875,offsets = {0.0375, 0.075, 0.15, 0.225} },
+    kure       = { m1 = 0.32,  m2 = 0.30,  offsets = nil },
+    muaythai   = { m1 = 0.30,  m2 = 0.60,  offsets = nil },
+    skygaolang = { m1 = 0.32,  m2 = 0.35,  offsets = nil },
+    variant    = { m1 = 0.32,  m2 = 0.35,  offsets = nil },
+    taekwondo  = { m1 = 0.32,  m2 = 0.46,  offsets = nil },
+    wild       = { m1 = 0.32,  m2 = 0.525, offsets = nil },
+    wingchun   = { m1 = 0.28,  m2 = 0.525, offsets = nil },
+    wrestling  = { m1 = 0.32,  m2 = 0.525, offsets = nil },
+    capoeira   = { m1 = 0.33,  m2 = 0.45,  offsets = {0.02, 0.1, 0.02, -0.05} },
+    slugger    = { m1 = 0.20,  m2 = 0.82,  offsets = {0.3, 0.25, 0.25, 0.17} },
+}
+
+-- // FETCH COMBAT MODULES //
+local BlockModule, M1Module, M2Module, EquipModule, EvasiveModule
+task.spawn(function()
+    pcall(function()
+        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("ModuleScript") then
+                if obj.Name == "Block" and not BlockModule then BlockModule = require(obj)
+                elseif obj.Name == "M1" and not M1Module then M1Module = require(obj)
+                elseif obj.Name == "M2" and not M2Module then M2Module = require(obj)
+                elseif obj.Name == "Equip" and not EquipModule then EquipModule = require(obj)
+                elseif obj.Name == "Evasive" and not EvasiveModule then EvasiveModule = require(obj)
+                end
+            end
+        end
+    end)
+end)
+
+-- // STATE //
+local AutoParryEnabled = false
+local AutoAttackEnabled = false
+local STATE = "IDLE" -- IDLE, CHASE, ATTACK, PARRY, PUNISH, WAIT_RESET, GUARD_BREAK
+
+local isBlockingNow = false
+local lastBlockTime = 0
+local lastAttackTime = 0
+local lastM2Time = 0
+local myComboCount = 0
+
+local enemyAttackStart = {}
+local enemySkipped = {}
+local enemySkillStart = {}
+local enemyLastAttacked = {}
+local lockedTarget = nil
+local parryEndTime = 0
+
+local stats = { parries = 0, skips = 0, hits = 0, m2s = 0, kills = 0 }
+
+
+-- // SKT UI DESIGN //
+local CoreGui
+pcall(function()
+    if gethui then CoreGui = gethui()
+    else CoreGui = game:GetService("CoreGui") end
+end)
+if not CoreGui then CoreGui = LocalPlayer:WaitForChild("PlayerGui") end
+if CoreGui:FindFirstChild("SKT_Hub_Custom") then CoreGui.SKT_Hub_Custom:Destroy() end
+
+local UI_Config = {
+    MainColor = Color3.fromRGB(15, 15, 15),
+    SecondaryColor = Color3.fromRGB(25, 25, 25),
+    AccentColor = Color3.fromRGB(255, 200, 0), -- SKT Yellow
+    TextColor = Color3.fromRGB(255, 255, 255),
+    DimTextColor = Color3.fromRGB(150, 150, 150),
+    Font = Enum.Font.GothamBold,
+}
+
+local SG = Instance.new("ScreenGui")
+SG.Name = "SKT_Hub_Custom"
+SG.ResetOnSpawn = false
+SG.Parent = CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 325)
+MainFrame.Position = UDim2.new(0, 20, 0.5, -120)
+MainFrame.BackgroundColor3 = UI_Config.MainColor
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = SG
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+local Stroke = Instance.new("UIStroke", MainFrame)
+Stroke.Color = UI_Config.AccentColor
+Stroke.Thickness = 1.5
+
+-- Background Crown Logo
+local BgLogo = Instance.new("ImageLabel")
+BgLogo.Size = UDim2.new(0.6, 0, 0.6, 0)
+BgLogo.Position = UDim2.new(0.2, 0, 0.2, 0)
+BgLogo.BackgroundTransparency = 1
+BgLogo.Image = "rbxassetid://6031280882" -- Crown Icon
+BgLogo.ImageColor3 = UI_Config.AccentColor
+BgLogo.ImageTransparency = 0.95
+BgLogo.ScaleType = Enum.ScaleType.Fit
+BgLogo.Parent = MainFrame
+
+-- Topbar
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 35)
+TopBar.BackgroundColor3 = UI_Config.SecondaryColor
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 10)
+
+-- Fix TopBar Bottom Corners
+local TopBarFix = Instance.new("Frame")
+TopBarFix.Size = UDim2.new(1, 0, 0, 10)
+TopBarFix.Position = UDim2.new(0, 0, 1, -10)
+TopBarFix.BackgroundColor3 = UI_Config.SecondaryColor
+TopBarFix.BorderSizePixel = 0
+TopBarFix.Parent = TopBar
+
+local TopLogo = Instance.new("ImageLabel")
+TopLogo.Size = UDim2.new(0, 25, 0, 25)
+TopLogo.Position = UDim2.new(0, 10, 0, 5)
+TopLogo.BackgroundTransparency = 1
+TopLogo.Image = "rbxassetid://6031280882"
+TopLogo.ImageColor3 = UI_Config.AccentColor
+TopLogo.Parent = TopBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+TitleLabel.Position = UDim2.new(0, 45, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "SKT Hub - Ultimate Combat"
+TitleLabel.TextColor3 = UI_Config.AccentColor
+TitleLabel.Font = UI_Config.Font
+TitleLabel.TextSize = 14
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
+
+-- UI Dragging
+local dragging, dragStart, startPos
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dragStart = input.Position; startPos = MainFrame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Toggle Creation Function
+local function CreateToggle(parent, name, yPos, callback)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(1, -20, 0, 30)
+    Frame.Position = UDim2.new(0, 10, 0, yPos)
+    Frame.BackgroundColor3 = UI_Config.SecondaryColor
+    Frame.Parent = parent
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -50, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = UI_Config.TextColor
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 13
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Frame
+    
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Size = UDim2.new(0, 40, 0, 20)
+    ToggleBtn.Position = UDim2.new(1, -45, 0.5, -10)
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    ToggleBtn.Text = ""
+    ToggleBtn.AutoButtonColor = false
+    ToggleBtn.Parent = Frame
+    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+    
+    local Circle = Instance.new("Frame")
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    Circle.Parent = ToggleBtn
+    Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+    
+    local toggled = false
+    ToggleBtn.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        callback(toggled)
+        TweenService:Create(Circle, TweenInfo.new(0.2), {Position = toggled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}):Play()
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = toggled and UI_Config.AccentColor or Color3.fromRGB(40, 40, 40)}):Play()
+    end)
+end
+
+-- Toggles
+CreateToggle(MainFrame, "🛡️ Auto Parry (Block/Defend)", 45, function(state)
+    AutoParryEnabled = state
+end)
+
+CreateToggle(MainFrame, "⚔️ Auto Attack (Combo/Chase)", 80, function(state)
+    AutoAttackEnabled = state
+end)
+
+CreateToggle(MainFrame, "🎯 Target Lock (Use Selector)", 115, function(state)
+    _G.TargetLockEnabled = state
+end)
+
+-- Target Selector UI
+_G.TargetList = {}
+_G.TargetIndex = 0
+_G.SelectedTargetName = nil
+
+local TargetFrame = Instance.new("Frame", MainFrame)
+TargetFrame.Size = UDim2.new(1, -20, 0, 30)
+TargetFrame.Position = UDim2.new(0, 10, 0, 150)
+TargetFrame.BackgroundColor3 = UI_Config.SecondaryColor
+Instance.new("UICorner", TargetFrame).CornerRadius = UDim.new(0, 6)
+
+local TargetLabel = Instance.new("TextLabel", TargetFrame)
+TargetLabel.Size = UDim2.new(1, -70, 1, 0)
+TargetLabel.Position = UDim2.new(0, 10, 0, 0)
+TargetLabel.BackgroundTransparency = 1
+TargetLabel.Text = "Target: [Closest]"
+TargetLabel.TextColor3 = UI_Config.AccentColor
+TargetLabel.Font = Enum.Font.GothamSemibold
+TargetLabel.TextSize = 13
+TargetLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local RefreshBtn = Instance.new("TextButton", TargetFrame)
+RefreshBtn.Size = UDim2.new(0, 25, 0, 20)
+RefreshBtn.Position = UDim2.new(1, -60, 0.5, -10)
+RefreshBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+RefreshBtn.Text = "🔄"
+RefreshBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 4)
+
+local NextBtn = Instance.new("TextButton", TargetFrame)
+NextBtn.Size = UDim2.new(0, 25, 0, 20)
+NextBtn.Position = UDim2.new(1, -30, 0.5, -10)
+NextBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+NextBtn.Text = "▶"
+NextBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", NextBtn).CornerRadius = UDim.new(0, 4)
+
+local function updateTargetList()
+    _G.TargetList = {}
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(_G.TargetList, p.Name)
+        end
+    end
+end
+
+RefreshBtn.MouseButton1Click:Connect(function()
+    updateTargetList()
+    TargetLabel.Text = "Players Found: " .. #_G.TargetList
+    task.wait(0.5)
+    if _G.TargetIndex == 0 then
+        TargetLabel.Text = "Target: [Closest]"
+    else
+        TargetLabel.Text = "Target: " .. (_G.TargetList[_G.TargetIndex] or "[Closest]")
+    end
+end)
+
+NextBtn.MouseButton1Click:Connect(function()
+    updateTargetList()
+    if #_G.TargetList == 0 then return end
+    _G.TargetIndex = _G.TargetIndex + 1
+    if _G.TargetIndex > #_G.TargetList then
+        _G.TargetIndex = 0
+        _G.SelectedTargetName = nil
+        TargetLabel.Text = "Target: [Closest]"
+    else
+        _G.SelectedTargetName = _G.TargetList[_G.TargetIndex]
+        TargetLabel.Text = "Target: " .. _G.SelectedTargetName
+    end
+end)
+
+-- Info Display
+local InfoContainer = Instance.new("Frame")
+InfoContainer.Size = UDim2.new(1, -20, 0, 110)
+InfoContainer.Position = UDim2.new(0, 10, 0, 185)
+InfoContainer.BackgroundColor3 = UI_Config.SecondaryColor
+InfoContainer.Parent = MainFrame
+Instance.new("UICorner", InfoContainer).CornerRadius = UDim.new(0, 6)
+
+local function makeLabel(y, size, color)
+    local L = Instance.new("TextLabel")
+    L.Size = UDim2.new(1, -10, 0, 16)
+    L.Position = UDim2.new(0, 5, 0, y)
+    L.BackgroundTransparency = 1
+    L.TextColor3 = color
+    L.Font = Enum.Font.Gotham
+    L.TextSize = size
+    L.TextXAlignment = Enum.TextXAlignment.Left
+    L.Text = ""
+    L.Parent = InfoContainer
+    return L
+end
+
+local StateL = makeLabel(5, 13, UI_Config.AccentColor)
+StateL.Font = Enum.Font.GothamBold
+local TargetL = makeLabel(25, 12, UI_Config.TextColor)
+local ActionL = makeLabel(45, 12, UI_Config.DimTextColor)
+local StatsL = makeLabel(85, 11, Color3.fromRGB(90, 200, 90))
+StatsL.Font = Enum.Font.GothamBold
+
+StateL.Text = "Status: Waiting..."
+TargetL.Text = "Target: None"
+ActionL.Text = ""
+StatsL.Text = "Parry:0  Hits:0  Kills:0"
+
+-- // COMBAT HELPERS //
+local function getStyleData(c)
+    local s = c and c:GetAttribute("CombatStyle")
+    if type(s)=="string" then s=string.lower(s); if STYLE_DATA[s] then return STYLE_DATA[s],s end end
+    return STYLE_DATA.default,"default"
+end
+
+local function getHitboxDelay(enemy, isM2)
+    local d = getStyleData(enemy)
+    return isM2 and d.m2 or d.m1
+end
+
+local function canBlock()
+    local c = LocalPlayer.Character
+    if not c then return false end
+    return not c:GetAttribute("Ragdoll")
+       and not c:GetAttribute("GuardBroken")
+       and not c:GetAttribute("Downed")
+       and not c:GetAttribute("BlockCooldown")
+       and not c:GetAttribute("Grappling")
+end
+
+local function enemyIsAttacking(enemy)
+    return enemy:GetAttribute("M1")==true
+        or enemy:GetAttribute("M2")==true
+        or enemy:GetAttribute("CombatAttacking")==true
+end
+
+local function enemyIsBlocking(enemy)
+    return enemy:GetAttribute("Blocking")==true
+end
+
+local function enemyIsStunned(enemy)
+    return enemy:GetAttribute("Stunned")==true
+        or enemy:GetAttribute("Parried")==true
+        or enemy:GetAttribute("Ragdoll")==true
+        or enemy:GetAttribute("GuardBroken")==true
+        or enemy:GetAttribute("Downed")==true
+end
+
+local function enemyIsUsingSkill(enemy)
+    local cant = enemy:GetAttribute("CantAnything")==true
+    return cant and not enemyIsAttacking(enemy) and not enemyIsStunned(enemy)
+end
+
+local function enemyIsHeavyAttacking(enemy)
+    if enemy:GetAttribute("M2") == true or enemy:GetAttribute("Heavy") == true then return true end
+    
+    for _, child in ipairs(enemy:GetChildren()) do
+        if child:IsA("Highlight") and child.Name ~= "TalkHighlight" and child.Name ~= "Hover_Highlight" then 
+            return true 
+        end
+    end
+    
+    local model = enemy:FindFirstChild("Model")
+    if model then
+        for _, child in ipairs(model:GetChildren()) do
+            if child:IsA("Highlight") and child.Name ~= "TalkHighlight" and child.Name ~= "Hover_Highlight" then 
+                return true 
+            end
+        end
+    end
+    
+    return false
+end
+
+local function weAreAttacking()
+    local c = LocalPlayer.Character
+    if not c then return false end
+    return c:GetAttribute("M1")==true
+        or c:GetAttribute("M2")==true
+        or c:GetAttribute("CombatAttacking")==true
+        or c:GetAttribute("M1Hold")==true
+end
+
+local function forceStopAttack()
+    local c = LocalPlayer.Character
+    if c then
+        c:SetAttribute("M1", nil)
+        c:SetAttribute("M2", nil)
+        c:SetAttribute("CombatAttacking", nil)
+        c:SetAttribute("M1Hold", nil)
+        c:SetAttribute("CantAnything", nil)
+    end
+end
+
+local function doBlock()
+    if not BlockModule or type(BlockModule.Block)~="function" then return false end
+    if isBlockingNow then return true end
+    if not canBlock() then return false end
+    local now = os.clock()
+    if now - lastBlockTime < 0.06 then return false end
+    
+    forceStopAttack()
+    isBlockingNow = true
+    lastBlockTime = now
+    pcall(function() BlockModule.Block() end)
+    stats.parries = stats.parries + 1
+    return true
+end
+
+local function releaseBlock()
+    if not isBlockingNow then return end
+    isBlockingNow = false
+    pcall(function()
+        if BlockModule and type(BlockModule.Unblock)=="function" then
+            BlockModule.Unblock()
+        end
+    end)
+end
+
+local function doM1()
+    if not M1Module or type(M1Module.OnM1Activated)~="function" then return false end
+    if isBlockingNow then releaseBlock() end
+    local now = os.clock()
+    if now - lastAttackTime < 0.22 then return false end
+    
+    lastAttackTime = now
+    
+    local c = LocalPlayer.Character
+    if c then
+        local count = c:GetAttribute("M1Count") or 0
+        myComboCount = count + 1
+    end
+    
+    pcall(function() M1Module.OnM1Activated() end)
+    stats.hits = stats.hits + 1
+    return true
+end
+
+local function doHeavyAttack()
+    if isBlockingNow then releaseBlock() end
+    local now = os.clock()
+    if now - lastM2Time < M2_COOLDOWN then return false end
+    
+    lastM2Time = now
+    
+    task.spawn(function()
+        pcall(function()
+            local vim = game:GetService("VirtualInputManager")
+            vim:SendKeyEvent(true, Enum.KeyCode.R, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+        end)
+    end)
+    
+    stats.m2s = stats.m2s + 1
+    return true
+end
+
+local function doDodge(target)
+    local char = LocalPlayer.Character
+    if not char then return false end
+    
+    -- Check if dash is on cooldown
+    if char:GetAttribute("EvasiveCooldownRemaining") or char:GetAttribute("IFRAMECD") or char:GetAttribute("EvasiveCooldown") == true then return false end
+    
+    if isBlockingNow then releaseBlock() end
+    
+    -- Face away from target to dash backwards
+    if target and target:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("HumanoidRootPart") then
+        local awayVector = (char.HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit
+        char.Humanoid:Move(awayVector, false)
+    end
+    
+    task.spawn(function()
+        pcall(function()
+            local vim = game:GetService("VirtualInputManager")
+            vim:SendKeyEvent(true, Enum.KeyCode.S, false, game)
+            task.wait(0.02)
+            vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+            vim:SendKeyEvent(false, Enum.KeyCode.S, false, game)
+        end)
+    end)
+    
+    pcall(function()
+        if EvasiveModule and type(EvasiveModule.Evasive) == "function" then
+            EvasiveModule.Evasive()
+        end
+    end)
+    
+    return true
+end
+
+-- // TARGET SYSTEM (CLOSEST ENEMY OR SELECTED) //
+local function findTarget()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil, 999 end
+    local myPos = char.HumanoidRootPart.Position
+    
+    if _G.TargetLockEnabled and _G.SelectedTargetName then
+        local p = game.Players:FindFirstChild(_G.SelectedTargetName)
+        if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local h = p.Character:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
+                local dist = (myPos - p.Character.HumanoidRootPart.Position).Magnitude
+                return p.Character, dist
+            end
+        end
+    end
+    
+    if not _G.TargetLockEnabled and _G.CurrentClosestTarget then
+        local c = _G.CurrentClosestTarget
+        if c:FindFirstChild("HumanoidRootPart") then
+            local h = c:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 and c:GetAttribute("Downed") ~= true then
+                local dist = (myPos - c.HumanoidRootPart.Position).Magnitude
+                if dist < 80 then -- Keep attacking them if they are within 80 studs!
+                    return c, dist
+                end
+            end
+        end
+    end
+    
+    local best, bestDist = nil, 200
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local h = p.Character:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
+                local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    best = p.Character
+                end
+            end
+        end
+    end
+    lockedTarget = best
+    return best, bestDist
+end
+
+-- // PARRY & ATTACK RANGE //
+local M1_RANGE = 7 -- Expanded from 5 for Hitbox Expander
+local M2_RANGE = 7
+local PARRY_RANGE = 8
+local CHASE_RANGE = 500
+
+-- // MAIN BRAIN //
+RunService.RenderStepped:Connect(function()
+    if not AutoParryEnabled and not AutoAttackEnabled then
+        if isBlockingNow then releaseBlock() end
+        STATE = "IDLE"
+        StateL.Text = "Status: Idle (Toggles Off)"
+        return
+    end
+    
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
+    
+    -- Auto Equip Fists (Only if attacking is enabled, so we don't randomly equip if just parrying)
+    if AutoAttackEnabled and char:GetAttribute("Equip") ~= true then
+        pcall(function()
+            if EquipModule and type(EquipModule.Equip) == "function" then
+                EquipModule.Equip()
+            end
+        end)
+    end
+    
+    local hum = char.Humanoid
+    local myPos = char.HumanoidRootPart.Position
+    local now = os.clock()
+    
+    -- // AUTO REVIVE (Restart your heart) //
+    local isDowned = char:GetAttribute("Downed") == true or hum.Health <= 0
+    pcall(function()
+        local deathUI = LocalPlayer.PlayerGui:FindFirstChild("DeathUI")
+        if deathUI then
+            if isDowned then
+                -- Throttle clicking to avoid crashing/freezing the UI (every 0.1s instead of 60 FPS)
+                if not _G.lastHeartPump or now - _G.lastHeartPump > 0.1 then
+                    _G.lastHeartPump = now
+                    local btn = deathUI:FindFirstChild("HeartButton", true)
+                    
+                    if btn and btn.Visible then
+                        task.spawn(function()
+                            pcall(function()
+                                local vim = game:GetService("VirtualInputManager")
+                                local vp = workspace.CurrentCamera.ViewportSize
+                                local x, y = vp.X / 2, vp.Y / 2
+                                vim:SendMouseButtonEvent(x, y, 0, true, game, 1)
+                                task.wait(0.01)
+                                vim:SendMouseButtonEvent(x, y, 0, false, game, 1)
+                            end)
+                        end)
+                    end
+                end
+            end
+        end
+    end)
+    
+    local target, dist = findTarget()
+    
+    if not target then
+        STATE = "IDLE"
+        if isBlockingNow then releaseBlock() end
+        StateL.Text = "Status: Scanning..."
+        TargetL.Text = "Target: None"
+        ActionL.Text = "Waiting for enemies..."
+        return
+    end
+    
+    local targetRoot = target:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+    
+    -- Ensure we are alive to fight!
+    if isDowned then return end
+    
+    local e_attacking = enemyIsAttacking(target)
+    if e_attacking then
+        enemyLastAttacked[target] = now
+        if not enemyAttackStart[target] then
+            enemyAttackStart[target] = now
+            enemySkipped[target] = nil
+        end
+    else
+        -- EXACTLY AS REQUESTED: If they stop attacking, we immediately transition out of defense
+        enemyAttackStart[target] = nil
+        enemySkipped[target] = nil
+    end
+    
+    local e_skill = enemyIsUsingSkill(target)
+    if e_skill then
+        if not enemySkillStart[target] then
+            enemySkillStart[target] = now
+        end
+    else
+        enemySkillStart[target] = nil
+    end
+    
+    local elapsed = enemyAttackStart[target] and (now - enemyAttackStart[target]) or 0
+    local skillElapsed = enemySkillStart[target] and (now - enemySkillStart[target]) or 0
+    
+    local e_blocking = enemyIsBlocking(target)
+    local e_stunned = enemyIsStunned(target)
+    local e_isHeavy = enemyIsHeavyAttacking(target)
+    local hitboxDelay = getHitboxDelay(target, e_isHeavy)
+    
+    -- // COMBAT LOGIC //
+    
+    -- PRIORITY 1: PUNISH (Stunned Enemy)
+    if AutoAttackEnabled and e_stunned and dist <= M1_RANGE then
+        STATE = "PUNISH"
+        if isBlockingNow and now > parryEndTime then releaseBlock() end
+        doM1()
+        
+        -- Clear defense states to commit to attacking
+        enemyAttackStart[target] = nil
+        enemySkipped[target] = nil
+        
+        StateL.Text = "Status: 💥 PUNISH COMBO"
+        TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+        ActionL.Text = string.format("Combo Hit #%d", myComboCount)
+        
+    -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
+    elseif AutoParryEnabled and ((enemyAttackStart[target] and dist <= PARRY_RANGE) or (e_skill and dist <= 30) or (e_isHeavy and dist <= 20)) then
+        
+        -- Stop attacking to ensure we can defend
+        if weAreAttacking() then forceStopAttack() end
+        
+        local isGuardBroken = char:GetAttribute("GuardBroken") == true
+        
+        -- If it's a Heavy Attack (detected by color/highlight), always Dash Dodge!
+        if e_isHeavy and doDodge(target) then
+            STATE = "DODGE"
+            StateL.Text = "Status: 💨 DODGED HEAVY"
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Evaded heavy attack (Color detected)!"
+            parryEndTime = now + 0.5
+        -- If guard is broken, we must dodge!
+        elseif isGuardBroken and (enemyAttackStart[target] or e_skill) and doDodge(target) then
+            STATE = "DODGE"
+            StateL.Text = "Status: 💨 DODGED (GUARD BROKEN)"
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Guard broken, evading!"
+            parryEndTime = now + 0.5
+        elseif e_skill and skillElapsed < 1.2 then
+            STATE = "PARRY"
+            doBlock()
+            parryEndTime = now + 0.5
+            StateL.Text = "Status: 🎯 SKILL BLOCK"
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Blocking skill!"
+        elseif e_skill and skillElapsed >= 1.2 then
+            STATE = "WAIT_RESET"
+            if isBlockingNow and now > parryEndTime then releaseBlock() end
+            StateL.Text = "Status: ⏳ SKILL TIMEOUT"
+        elseif enemySkipped[target] then
+            STATE = "WAIT_RESET"
+            -- Always release block if parry window expires to prevent "holding block"
+            if isBlockingNow and now > parryEndTime then releaseBlock() end
+            StateL.Text = "Status: ⏳ WAIT RESET"
+        else
+            -- SINGLE PARRY LOGIC
+            local idealTime = hitboxDelay - 0.20
+            
+            if elapsed < idealTime then
+                STATE = "WAIT_PARRY"
+                if isBlockingNow and now > parryEndTime then releaseBlock() end
+                StateL.Text = string.format("Status: ⏱️ TIMING (%.2fs)", idealTime - elapsed)
+                
+            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
+                -- Window for the first hit
+                STATE = "PARRY"
+                if not isBlockingNow then doBlock() end
+                parryEndTime = now + 0.25
+                StateL.Text = "Status: ⚡ M1 PARRY"
+                
+            else
+                -- We only parry once per attack string! 
+                -- If we successfully parry, the enemy is usually stunned anyway.
+                enemySkipped[target] = true
+                stats.skips = stats.skips + 1
+                STATE = "WAIT_RESET"
+                if isBlockingNow and now > parryEndTime then releaseBlock() end
+                StateL.Text = "Status: ❌ PARRY DONE/MISSED"
+            end
+            
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Single Parry Logic"
+        end
+        
+    -- PRIORITY 3: GUARD BREAK (HEAVY)
+    elseif AutoAttackEnabled and e_blocking and dist <= M2_RANGE then
+        STATE = "GUARD_BREAK"
+        if isBlockingNow then releaseBlock() end
+        
+        if now - lastM2Time >= M2_COOLDOWN then
+            doHeavyAttack()
+            StateL.Text = "Status: 🔨 GUARD BREAK"
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Using Heavy (R)!"
+        end
+        
+    -- PRIORITY 4: ATTACK (M1)
+    elseif AutoAttackEnabled and dist <= M1_RANGE and not (e_attacking or e_skill) and not e_blocking then
+        STATE = "ATTACK"
+        if isBlockingNow then releaseBlock() end
+        
+        doM1()
+        StateL.Text = "Status: 👊 ATTACKING"
+        TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+        ActionL.Text = "Enemy is open!"
+        
+    -- PRIORITY 5: CHASE
+    elseif AutoAttackEnabled and dist > M1_RANGE and dist <= CHASE_RANGE then
+        STATE = "CHASE"
+        if isBlockingNow and dist > PARRY_RANGE then releaseBlock() end
+        hum:MoveTo(targetRoot.Position)
+        
+        if dist > 25 and not (e_attacking or e_skill) and char:GetAttribute("EvasiveCooldown") ~= true then
+            task.spawn(function()
+                pcall(function()
+                    local vim = game:GetService("VirtualInputManager")
+                    vim:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                    task.wait(0.02)
+                    vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                    task.wait(0.05)
+                    vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                    vim:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                end)
+            end)
+        end
+        
+        StateL.Text = "Status: 🏃 CHASING"
+        TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+        ActionL.Text = "Closing distance to target"
+        
+    else
+        STATE = "IDLE"
+        if isBlockingNow then releaseBlock() end
+        StateL.Text = "Status: 👁️ WATCHING"
+        TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+        ActionL.Text = "In range, waiting for opening..."
+    end
+    
+    local th = target:FindFirstChildOfClass("Humanoid")
+    if th and th.Health <= 0 then
+        lockedTarget = nil
+        stats.kills = stats.kills + 1
+    end
+    
+    StatsL.Text = string.format("Parry: %d  |  Hits: %d  |  Kills: %d", stats.parries, stats.hits, stats.kills)
+end)
+
+-- // ANIMATION BACKUP LISTENER //
+task.spawn(function()
+    local function wireAnimator(character, player)
+        if player == LocalPlayer then return end
+        local hum = character:WaitForChild("Humanoid", 5)
+        if not hum then return end
+        local anim = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 3)
+        if not anim then return end
+        
+        anim.AnimationPlayed:Connect(function(track)
+            if not AutoParryEnabled then return end
+            local n = string.lower(track.Name or "")
+            local isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
+                or string.find(n,"attack") or string.find(n,"heavy") or string.find(n,"kick")
+                or string.find(n,"swing") or string.find(n,"slam")
+            if isAtk then
+                local mc = LocalPlayer.Character
+                if mc and mc:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
+                    if (character.HumanoidRootPart.Position - mc.HumanoidRootPart.Position).Magnitude <= 30 then
+                        enemyAttackStart[character] = os.clock()
+                        enemySkipped[character] = nil
+                    end
+                end
+            end
+        end)
+    end
+    
+    local function watch(p)
+        if p == LocalPlayer then return end
+        if p.Character then task.spawn(wireAnimator, p.Character, p) end
+        p.CharacterAdded:Connect(function(c) task.spawn(wireAnimator, c, p) end)
+    end
+    for _, p in ipairs(Players:GetPlayers()) do watch(p) end
+    Players.PlayerAdded:Connect(watch)
+end)
+
+-- // CONTINUOUS CHASE //
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        if AutoAttackEnabled and (STATE == "CHASE" or STATE == "ATTACK" or STATE == "PUNISH" or STATE == "GUARD_BREAK") then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") and lockedTarget and lockedTarget:FindFirstChild("HumanoidRootPart") then
+                local dist = (lockedTarget.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                if dist > 3 then
+                    char.Humanoid:MoveTo(lockedTarget.HumanoidRootPart.Position)
+                end
+                if dist > 15 then
+                    local VirtualInputManager = game:GetService("VirtualInputManager")
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+                end
+            end
+        end
+    end
+end)
+
+print("[SKT Hub] Loaded! UI Created.")
