@@ -4,10 +4,10 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
 local UI_Config = {
-    MainColor = Color3.fromRGB(18, 18, 24),
-    SidebarColor = Color3.fromRGB(12, 12, 16),
-    CardColor = Color3.fromRGB(24, 24, 32),
-    AccentColor = Color3.fromRGB(255, 204, 0), -- Yellow Theme
+    MainColor = Color3.fromRGB(15, 15, 22),
+    SidebarColor = Color3.fromRGB(10, 10, 15),
+    CardColor = Color3.fromRGB(20, 20, 28),
+    AccentColor = Color3.fromRGB(0, 255, 255), -- Sci-Fi Cyan Theme
     TextColor = Color3.fromRGB(255, 255, 255),
     DimTextColor = Color3.fromRGB(150, 150, 160),
     Font = Enum.Font.GothamMedium,
@@ -29,6 +29,37 @@ local function CreateStroke(parent, color, thickness)
     return stroke
 end
 
+local HttpService = game:GetService("HttpService")
+
+local ConfigManager = {
+    FolderName = "AnimeDuelistsHub",
+    FileName = "SaveConfig.json",
+    Config = {}
+}
+
+function ConfigManager:Init()
+    pcall(function()
+        if not isfolder(self.FolderName) then
+            makefolder(self.FolderName)
+        end
+        if isfile(self.FolderName .. "/" .. self.FileName) then
+            local data = readfile(self.FolderName .. "/" .. self.FileName)
+            self.Config = HttpService:JSONDecode(data) or {}
+        end
+    end)
+end
+
+function ConfigManager:Save()
+    pcall(function()
+        if not isfolder(self.FolderName) then
+            makefolder(self.FolderName)
+        end
+        writefile(self.FolderName .. "/" .. self.FileName, HttpService:JSONEncode(self.Config))
+    end)
+end
+
+ConfigManager:Init()
+
 function SKT_UI:CreateWindow(options)
     local Window = {}
     local Title = options.Name or "SKT Hub"
@@ -41,6 +72,37 @@ function SKT_UI:CreateWindow(options)
     SG.Name = "SKT_Hub_Custom"
     SG.ResetOnSpawn = false
     SG.Parent = CoreGui
+    
+    local IntroGui = Instance.new("ScreenGui")
+    IntroGui.Name = "SKT_Intro_Gui"
+    IntroGui.Parent = CoreGui
+    local IntroBg = Instance.new("Frame")
+    IntroBg.Size = UDim2.new(1, 0, 1, 0)
+    IntroBg.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    IntroBg.BackgroundTransparency = 1
+    IntroBg.BorderSizePixel = 0
+    IntroBg.Parent = IntroGui
+
+    local IntroLogo = Instance.new("ImageLabel")
+    IntroLogo.Size = UDim2.new(0, 150, 0, 150)
+    IntroLogo.AnchorPoint = Vector2.new(0.5, 0.5)
+    IntroLogo.Position = UDim2.new(0.5, 0, 0.45, 0)
+    IntroLogo.BackgroundTransparency = 1
+    IntroLogo.Image = UI_Config.LogoID
+    IntroLogo.ImageTransparency = 1
+    IntroLogo.Parent = IntroGui
+
+    local IntroText = Instance.new("TextLabel")
+    IntroText.AnchorPoint = Vector2.new(0.5, 0.5)
+    IntroText.Position = UDim2.new(0.5, 0, 0.65, 0)
+    IntroText.Size = UDim2.new(1, 0, 0, 100)
+    IntroText.BackgroundTransparency = 1
+    IntroText.Text = "SYSTEM INITIALIZING..."
+    IntroText.TextColor3 = UI_Config.AccentColor
+    IntroText.Font = Enum.Font.GothamBold
+    IntroText.TextSize = 40
+    IntroText.TextTransparency = 1
+    IntroText.Parent = IntroGui
     
     local MiniBtn = Instance.new("ImageButton")
     MiniBtn.Name = "MiniBtn"
@@ -80,15 +142,27 @@ function SKT_UI:CreateWindow(options)
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 750, 0, 480)
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    MainFrame.Visible = false
     MainFrame.BackgroundColor3 = UI_Config.MainColor
+    MainFrame.BackgroundTransparency = 0.15 -- Glassmorphism
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = true
     MainFrame.Parent = SG
     CreateCorner(MainFrame, 8)
-    CreateStroke(MainFrame, UI_Config.SidebarColor, 2)
+    
+    local MainGradient = Instance.new("UIGradient")
+    MainGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.05, Color3.fromRGB(230, 230, 230)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 150, 150))
+    })
+    MainGradient.Rotation = 90
+    MainGradient.Parent = MainFrame
+    local MainStroke = CreateStroke(MainFrame, UI_Config.AccentColor, 1)
+    MainStroke.Transparency = 0.3
     
     local MinimizeBtn = Instance.new("TextButton")
     MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
@@ -111,6 +185,40 @@ function SKT_UI:CreateWindow(options)
     CloseBtn.TextSize = 20
     CloseBtn.ZIndex = 10
     CloseBtn.Parent = MainFrame
+
+    local ResizeBtn = Instance.new("TextButton")
+    ResizeBtn.Name = "ResizeBtn"
+    ResizeBtn.Size = UDim2.new(0, 20, 0, 20)
+    ResizeBtn.Position = UDim2.new(1, -20, 1, -20)
+    ResizeBtn.BackgroundTransparency = 1
+    ResizeBtn.Text = "โ—ข"
+    ResizeBtn.TextColor3 = UI_Config.AccentColor
+    ResizeBtn.Font = Enum.Font.GothamBold
+    ResizeBtn.TextSize = 14
+    ResizeBtn.ZIndex = 10
+    ResizeBtn.Parent = MainFrame
+    
+    local resizing, resizeStartPos, resizeStartSize
+    ResizeBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            resizeStartPos = input.Position
+            resizeStartSize = MainFrame.Size
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and resizing then
+            local delta = input.Position - resizeStartPos
+            local newWidth = math.clamp(resizeStartSize.X.Offset + delta.X, 500, 1000)
+            local newHeight = math.clamp(resizeStartSize.Y.Offset + delta.Y, 300, 800)
+            MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+        end
+    end)
 
     local isAnimating = false
     local function ToggleUI(state)
@@ -192,8 +300,18 @@ function SKT_UI:CreateWindow(options)
     Sidebar.Name = "Sidebar"
     Sidebar.Size = UDim2.new(0, 180, 1, 0)
     Sidebar.BackgroundColor3 = UI_Config.SidebarColor
+    Sidebar.BackgroundTransparency = 0.2 -- Glassmorphism
     Sidebar.BorderSizePixel = 0
     Sidebar.Parent = MainFrame
+    
+    local SideGradient = Instance.new("UIGradient")
+    SideGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.05, Color3.fromRGB(230, 230, 230)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(130, 130, 130))
+    })
+    SideGradient.Rotation = 90
+    SideGradient.Parent = Sidebar
 
     local TopLogo = Instance.new("Frame")
     TopLogo.Name = "TopLogo"
@@ -209,6 +327,7 @@ function SKT_UI:CreateWindow(options)
     LogoImg.Parent = TopLogo
 
     local LogoText = Instance.new("TextLabel")
+    LogoText.Name = "LogoText"
     LogoText.Size = UDim2.new(1, -55, 1, 0)
     LogoText.Position = UDim2.new(0, 55, 0, 0)
     LogoText.BackgroundTransparency = 1
@@ -249,10 +368,11 @@ function SKT_UI:CreateWindow(options)
     CreateStroke(TopHeader, UI_Config.SidebarColor, 1)
 
     local HeaderText = Instance.new("TextLabel")
+    HeaderText.Name = "HeaderText"
     HeaderText.Size = UDim2.new(0, 200, 1, 0)
     HeaderText.Position = UDim2.new(0, 15, 0, 0)
     HeaderText.BackgroundTransparency = 1
-    HeaderText.Text = "🎮 Map: Anime Duelists"
+    HeaderText.Text = "🗺️ Map: Anime Duelists"
     HeaderText.TextColor3 = UI_Config.AccentColor
     HeaderText.Font = Enum.Font.GothamBold
     HeaderText.TextSize = 14
@@ -282,7 +402,7 @@ function SKT_UI:CreateWindow(options)
     CreateCorner(DiscordBtn, 4)
     DiscordBtn.MouseButton1Click:Connect(function()
         if setclipboard then
-            setclipboard("https://discord.gg/XgcETfpJJ")
+            setclipboard("https://discord.gg/34Cfs6tRk")
         end
         pcall(function()
             game:GetService("StarterGui"):SetCore("SendNotification", {
@@ -308,10 +428,12 @@ function SKT_UI:CreateWindow(options)
         TabBtn.BackgroundTransparency = 1
         TabBtn.Text = "  " .. name
         TabBtn.TextColor3 = UI_Config.DimTextColor
-        TabBtn.Font = UI_Config.Font
+        TabBtn.Font = Enum.Font.GothamBold
         TabBtn.TextSize = 14
         TabBtn.TextXAlignment = Enum.TextXAlignment.Left
         TabBtn.Parent = TabContainer
+        
+        -- Intro animation moved to the end of CreateTab
         CreateCorner(TabBtn, 6)
         
         local TabGradient = Instance.new("UIGradient")
@@ -361,25 +483,47 @@ function SKT_UI:CreateWindow(options)
         TabBtn.MouseButton1Click:Connect(function()
             for _, t in ipairs(Tabs) do
                 t.Content.Visible = false
-                t.Btn.TextColor3 = UI_Config.DimTextColor
-                t.Btn.BackgroundTransparency = 1
-                t.Indicator.BackgroundTransparency = 1
-                t.Stroke.Transparency = 1
+                TweenService:Create(t.Btn, TweenInfo.new(0.3), {TextColor3 = UI_Config.DimTextColor, BackgroundTransparency = 1}):Play()
+                TweenService:Create(t.Indicator, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Size = UDim2.new(0, 3, 0, 0), BackgroundTransparency = 1}):Play()
+                TweenService:Create(t.Stroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
             end
             TabContent.Visible = true
-            TabBtn.TextColor3 = UI_Config.TextColor
-            TabBtn.BackgroundTransparency = 0.5
-            TabIndicator.BackgroundTransparency = 0
-            TabStroke.Transparency = 0
+            TabContent.Position = UDim2.new(0, 30, 0, 55)
+            TabContent.ScrollBarImageTransparency = 1
+            TweenService:Create(TabContent, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0, 10, 0, 55), ScrollBarImageTransparency = 0}):Play()
+            
+            TweenService:Create(TabBtn, TweenInfo.new(0.3), {TextColor3 = UI_Config.AccentColor, BackgroundTransparency = 0.5}):Play()
+            TweenService:Create(TabIndicator, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, 3, 0, 20), BackgroundTransparency = 0}):Play()
+            TweenService:Create(TabStroke, TweenInfo.new(0.3), {Transparency = 0}):Play()
         end)
 
         if FirstTab then
             FirstTab = false
             TabContent.Visible = true
-            TabBtn.TextColor3 = UI_Config.TextColor
+            TabBtn.TextColor3 = UI_Config.AccentColor
             TabBtn.BackgroundTransparency = 0.5
             TabIndicator.BackgroundTransparency = 0
             TabStroke.Transparency = 0
+            
+            task.spawn(function()
+                local ts = game:GetService("TweenService")
+                ts:Create(IntroBg, TweenInfo.new(0.5), {BackgroundTransparency = 0.2}):Play()
+                ts:Create(IntroLogo, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+                ts:Create(IntroText, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+                task.wait(1.5)
+                IntroText.Text = "ARE YOU READY FOR SKT HUB?"
+                task.wait(1.5)
+                
+                local outTween = ts:Create(IntroText, TweenInfo.new(0.8, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 1, TextSize = 60})
+                ts:Create(IntroLogo, TweenInfo.new(0.8, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2.new(0, 200, 0, 200)}):Play()
+                ts:Create(IntroBg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+                outTween:Play()
+                task.wait(0.8)
+                IntroGui:Destroy()
+                
+                MainFrame.Visible = true
+                ts:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 750, 0, 480)}):Play()
+            end)
         end
 
         function Tab:CreateSection(secName)
@@ -392,7 +536,7 @@ function SKT_UI:CreateWindow(options)
             SecText.Size = UDim2.new(1, 0, 1, 0)
             SecText.BackgroundTransparency = 1
             SecText.Text = ">> " .. secName
-            SecText.TextColor3 = UI_Config.TextColor
+            SecText.TextColor3 = UI_Config.AccentColor
             SecText.Font = Enum.Font.GothamBold
             SecText.TextSize = 15
             SecText.TextXAlignment = Enum.TextXAlignment.Left
@@ -434,6 +578,9 @@ function SKT_UI:CreateWindow(options)
             CreateCorner(ToggleCircle, 7)
 
             local toggled = opts.CurrentValue or false
+            if opts.Flag and ConfigManager.Config[opts.Flag] ~= nil then
+                toggled = ConfigManager.Config[opts.Flag]
+            end
             
             local function updateToggle(anim)
                 if toggled then
@@ -455,17 +602,29 @@ function SKT_UI:CreateWindow(options)
                         ToggleBtn.BackgroundColor3 = UI_Config.MainColor
                     end
                 end
-                if opts.Callback then
-                    opts.Callback(toggled)
-                end
             end
             
             updateToggle(false)
 
             ToggleBtn.MouseButton1Click:Connect(function()
                 toggled = not toggled
+                if opts.Flag then
+                    ConfigManager.Config[opts.Flag] = toggled
+                    ConfigManager:Save()
+                end
                 updateToggle(true)
+                if opts.Callback then
+                    task.spawn(function()
+                        opts.Callback(toggled)
+                    end)
+                end
             end)
+            
+            if opts.Callback then
+                task.spawn(function()
+                    opts.Callback(toggled)
+                end)
+            end
         end
 
         function Tab:CreateSlider(opts)
@@ -513,6 +672,9 @@ function SKT_UI:CreateWindow(options)
 
             local min, max = opts.Range[1], opts.Range[2]
             local current = opts.CurrentValue or min
+            if opts.Flag and ConfigManager.Config[opts.Flag] ~= nil then
+                current = ConfigManager.Config[opts.Flag]
+            end
             local increment = opts.Increment or 1
 
             local function updateSlider(val)
@@ -520,12 +682,24 @@ function SKT_UI:CreateWindow(options)
                 local percent = (current - min) / (max - min)
                 SliderFill.Size = UDim2.new(percent, 0, 1, 0)
                 SliderValue.Text = tostring(current) .. (opts.Suffix and (" " .. opts.Suffix) or "")
+                if opts.Flag then
+                    ConfigManager.Config[opts.Flag] = current
+                    ConfigManager:Save()
+                end
                 if opts.Callback then
                     opts.Callback(current)
                 end
             end
             
-            updateSlider(current)
+            -- Set UI without triggering save initially
+            local percent = (current - min) / (max - min)
+            SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+            SliderValue.Text = tostring(current) .. (opts.Suffix and (" " .. opts.Suffix) or "")
+            if opts.Callback then
+                task.spawn(function()
+                    opts.Callback(current)
+                end)
+            end
 
             local sliding = false
             SliderBg.InputBegan:Connect(function(input)
@@ -606,22 +780,83 @@ function SKT_UI:CreateWindow(options)
                     if child:IsA("TextButton") then child:Destroy() end
                 end
                 
+                if type(opts.CurrentOption) ~= "table" then
+                    opts.CurrentOption = opts.CurrentOption and {opts.CurrentOption} or {}
+                end
+                if opts.Flag and ConfigManager.Config[opts.Flag] ~= nil then
+                    opts.CurrentOption = ConfigManager.Config[opts.Flag]
+                    if type(opts.CurrentOption) ~= "table" then
+                        opts.CurrentOption = {opts.CurrentOption}
+                    end
+                end
+                
+                local function updateBtnText()
+                    if opts.MultipleOptions then
+                        if #opts.CurrentOption == 0 then
+                            DropBtn.Text = "None"
+                        elseif #opts.CurrentOption == 1 then
+                            DropBtn.Text = tostring(opts.CurrentOption[1])
+                        else
+                            DropBtn.Text = tostring(#opts.CurrentOption) .. " Selected"
+                        end
+                    else
+                        DropBtn.Text = tostring(opts.CurrentOption[1] or "None")
+                    end
+                end
+                updateBtnText()
+                
                 for i, opt in ipairs(options) do
                     local btn = Instance.new("TextButton")
                     btn.Size = UDim2.new(1, -10, 0, 25)
                     btn.BackgroundColor3 = UI_Config.MainColor
                     btn.Text = tostring(opt)
-                    btn.TextColor3 = UI_Config.TextColor
+                    
+                    local isSelected = false
+                    for _, v in ipairs(opts.CurrentOption) do
+                        if v == opt then isSelected = true break end
+                    end
+                    btn.TextColor3 = isSelected and UI_Config.AccentColor or UI_Config.TextColor
+                    
                     btn.Font = UI_Config.Font
                     btn.TextSize = 13
                     btn.Parent = ScrollFrame
                     CreateCorner(btn, 4)
 
                     btn.MouseButton1Click:Connect(function()
-                        DropBtn.Text = tostring(opt)
-                        isOpen = false
-                        TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, -10, 0, 45)}):Play()
-                        if opts.Callback then opts.Callback(opt) end
+                        if opts.MultipleOptions then
+                            local foundIdx = nil
+                            for idx, v in ipairs(opts.CurrentOption) do
+                                if v == opt then foundIdx = idx break end
+                            end
+                            if foundIdx then
+                                table.remove(opts.CurrentOption, foundIdx)
+                                btn.TextColor3 = UI_Config.TextColor
+                            else
+                                table.insert(opts.CurrentOption, opt)
+                                btn.TextColor3 = UI_Config.AccentColor
+                            end
+                            updateBtnText()
+                            if opts.Flag then
+                                ConfigManager.Config[opts.Flag] = opts.CurrentOption
+                                ConfigManager:Save()
+                            end
+                            if opts.Callback then opts.Callback(opts.CurrentOption) end
+                        else
+                            opts.CurrentOption = {opt}
+                            updateBtnText()
+                            for _, child in ipairs(ScrollFrame:GetChildren()) do
+                                if child:IsA("TextButton") then
+                                    child.TextColor3 = (child.Text == tostring(opt)) and UI_Config.AccentColor or UI_Config.TextColor
+                                end
+                            end
+                            isOpen = false
+                            TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, -10, 0, 45)}):Play()
+                            if opts.Flag then
+                                ConfigManager.Config[opts.Flag] = opts.CurrentOption
+                                ConfigManager:Save()
+                            end
+                            if opts.Callback then opts.Callback(opts.CurrentOption) end
+                        end
                     end)
                 end
                 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
@@ -629,6 +864,12 @@ function SKT_UI:CreateWindow(options)
             
             if opts.Options then
                 refreshOptions(opts.Options)
+            end
+            
+            if opts.Callback then
+                task.spawn(function()
+                    opts.Callback(opts.CurrentOption)
+                end)
             end
 
             DropBtn.MouseButton1Click:Connect(function()
@@ -684,6 +925,37 @@ function SKT_UI:CreateWindow(options)
             end)
         end
 
+        function Tab:CreateLabel(opts)
+            local LblFrame = Instance.new("Frame")
+            LblFrame.Size = UDim2.new(1, -10, 0, 35)
+            LblFrame.BackgroundColor3 = opts.Color or UI_Config.CardColor
+            LblFrame.Parent = TabContent
+            CreateCorner(LblFrame, 6)
+            
+            if opts.Gradient then
+                local gradient = Instance.new("UIGradient")
+                gradient.Color = opts.Gradient
+                gradient.Parent = LblFrame
+            end
+
+            local LblText = Instance.new("TextLabel")
+            LblText.Size = UDim2.new(1, -30, 1, 0)
+            LblText.Position = UDim2.new(0, 15, 0, 0)
+            LblText.BackgroundTransparency = 1
+            LblText.Text = opts.Name
+            LblText.TextColor3 = opts.TextColor or UI_Config.TextColor
+            LblText.Font = opts.Font or UI_Config.Font
+            LblText.TextSize = 14
+            LblText.TextXAlignment = (opts.Alignment == "Center") and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+            LblText.Parent = LblFrame
+            
+            return {
+                Set = function(self, newText)
+                    LblText.Text = newText
+                end
+            }
+        end
+
         return Tab
     end
     
@@ -725,12 +997,12 @@ local Tab_Trial = Window:CreateTab("Trial")
 local Tab_Raid = Window:CreateTab("Tower Raid")
 local Tab_OpenStar = Window:CreateTab("Open Star")
 local Tab_Teleport = Window:CreateTab("Teleport")
-local Tab_Misc = Window:CreateTab("Misc")
+local Tab_Misc = Window:CreateTab("Rewards & Misc")
 local Tab_Player = Window:CreateTab("Player")
 local Tab_Boost = Window:CreateTab("Boost")
 
 -- ==========================================
--- ⚔️ AUTO FARM TAB
+-- เนยโ€เนเธย AUTO FARM TAB
 -- ==========================================
 
 
@@ -751,6 +1023,7 @@ local function SafeUITeleport(targetModuleOrName)
                     if searchName == "blacksmithsvillage" then searchName = "blacksmiths village" end
                     if searchName == "planetofwarriors" then searchName = "planet of warriors" end
                     if searchName == "towercity" then searchName = "tower city" end
+                    if searchName == "onlineisland" then searchName = "online island" end
                     
                     local cleanObjText = string.gsub(textLower, " ", "")
                     local cleanSearchName = string.gsub(searchName, " ", "")
@@ -795,6 +1068,53 @@ local function SafeUITeleport(targetModuleOrName)
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         pcall(function() Bridge:FireServer("General", "Portal", "Teleport", targetModuleOrName) end)
         
+        -- Physical fallback: teleport character to the portal in the workspace
+        pcall(function()
+            local searchName = string.lower(string.gsub(targetModuleOrName, " ", ""))
+            if searchName == "lobby" then searchName = "startertown" end
+            
+            local function findPortal(parent)
+                for _, v in ipairs(parent:GetDescendants()) do
+                    if (v:IsA("Model") or v:IsA("BasePart")) then
+                        local cleanName = string.lower(string.gsub(v.Name, " ", ""))
+                        if string.find(cleanName, searchName) then
+                            -- Check if it looks like a portal
+                            local pName = string.lower(v.Parent.Name)
+                            if string.match(pName, "portal") or string.match(pName, "teleport") or v:FindFirstChildWhichIsA("ProximityPrompt", true) then
+                                return v
+                            end
+                            if v:IsA("BasePart") and (string.match(cleanName, "portal") or string.match(cleanName, "door")) then
+                                return v
+                            end
+                        end
+                    end
+                end
+                return nil
+            end
+            
+            local portal = nil
+            local server = workspace:FindFirstChild("Server")
+            if server then
+                local starterTown = server:FindFirstChild("StarterTown") or server:FindFirstChild("Lobby")
+                if starterTown then
+                    portal = findPortal(starterTown)
+                end
+                if not portal then
+                    portal = findPortal(server)
+                end
+            end
+            
+            if portal and hrp2 then
+                local targetCFrame = portal:IsA("Model") and portal:GetPivot() or portal.CFrame
+                hrp2.CFrame = targetCFrame
+                task.wait(0.5)
+                local prompt = portal:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and fireproximityprompt then
+                    fireproximityprompt(prompt)
+                end
+            end
+        end)
+        
         task.delay(4, function()
             if hrp2 then hrp2.Anchored = false end
         end)
@@ -827,7 +1147,8 @@ local MapOrderList = {
     "Blacksmiths Village",
     "Planet Of Warriors",
     "Pirate Island",
-    "Tower City"
+    "Tower City",
+    "Online Island"
 }
 
 local MapUnlockCost = {
@@ -835,7 +1156,8 @@ local MapUnlockCost = {
     ["Blacksmiths Village"] = 100000,
     ["Planet Of Warriors"] = 700000,
     ["Pirate Island"] = 12000000,
-    ["Tower City"] = 300000000
+    ["Tower City"] = 300000000,
+    ["Online Island"] = 7000000000
 }
 
 
@@ -845,7 +1167,8 @@ local QuestData = {
     ["Blacksmiths Village"] = {Module = "BlacksmithsVillage", Npc = "BlacksmithsQuest", Monsters = {"Enmo", "Ruih", "Hantego", "Dhoma", "Kokoshibo"}},
     ["Planet Of Warriors"] = {Module = "PlanetOfWarriors", Npc = "WarriorsQuest", Monsters = {"Gran", "Boo", "GokoBlack", "Frieza", "Broli"}},
     ["Leveling City"] = {Module = "LevelingCity", Npc = "LevelingQuest", Monsters = {"MaceGuardian", "AxeGuardian", "SwordGuardian", "SingerGuardian", "BigGuardian"}},
-    ["Tower City"] = {Module = "TowerCity", Npc = "TowerQuest", Monsters = {"Haribol", "Coyoti", "Yhwache", "Grimmjew", "Ichegi"}}
+    ["Tower City"] = {Module = "TowerCity", Npc = "TowerQuest", Monsters = {"Haribol", "Coyoti", "Yhwache", "Grimmjew", "Ichegi"}},
+    ["Online Island"] = {Module = "OnlineIsland", Npc = "OnlineQuest", Monsters = {"Sino", "Elice", "Len", "Lefa", "Gun"}}
 }
 
 _G.SelectedQuestKey = "Pirate Island"
@@ -864,24 +1187,29 @@ local MonsterDropdown = Tab_Autofarm:CreateDropdown({
 
 local MapDropdown = Tab_Autofarm:CreateDropdown({
     Name = "Select Quest Map",
-    Options = {"Pirate Island", "Blacksmiths Village", "Planet Of Warriors", "Leveling City", "Tower City"},
+    Options = {"Pirate Island", "Blacksmiths Village", "Planet Of Warriors", "Leveling City", "Tower City", "Online Island"},
     CurrentOption = {"Pirate Island"},
     MultipleOptions = false,
     Flag = "QuestSelect", 
     Callback = function(Option)
         _G.SelectedQuestKey = type(Option) == "table" and Option[1] or Option
         
-        -- ทิ้งเควสเก่าทุกครั้งที่เปลี่ยนแมพ ป้องกันบัครับเควสซ้อน
-        pcall(function()
-            local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
-            Bridge:FireServer("General", "Quest", "Abandon")
-            
-            -- วาร์ปไปยังแมพที่เลือกทันที! (ดึงชื่อ Module จาก QuestData)
-            local targetKey = _G.SelectedQuestKey
-            local qData = QuestData[targetKey]
-            if qData and qData.Module then
-                SafeUITeleport(qData.Module)
-            end
+        -- เน€เธโ€”เน€เธเธ”เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย
+        task.spawn(function()
+            pcall(function()
+                local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+                Bridge:FireServer("General", "Quest", "Abandon")
+                
+                -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•! (เน€เธโ€เน€เธเธ–เน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธ Module เน€เธยเน€เธเธ’เน€เธย QuestData)
+                local targetKey = _G.SelectedQuestKey
+                local qData = QuestData[targetKey]
+                if qData and qData.Module then
+                    SafeUITeleport(qData.Module)
+                    task.wait(1.5) -- เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ…เน€เธโ€เน€เธเธเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธเน€เธย
+                    -- เน€เธเธเน€เธเธ”เน€เธย Remote เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•
+                    Bridge:FireServer("General", "Quest", "Accept", qData.Module)
+                end
+            end)
         end)
         
         -- Build dropdown options
@@ -893,12 +1221,12 @@ local MapDropdown = Tab_Autofarm:CreateDropdown({
             end
         end
         
-        -- เก็บค่าเดิมไว้ป้องกันปัญหาตอน Load Config
+        -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธโ€ขเน€เธเธเน€เธย Load Config
         local oldMonster = _G.SelectedMonster
         
         MonsterDropdown:Refresh(opts, {opts[1]})
         
-        -- ถ้าค่าเดิมมีในตัวเลือกของแมพนี้ ให้ใช้ค่าเดิม
+        -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธเน€เธเธเน€เธเธ•เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธย เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธ
         local foundOld = false
         for _, o in ipairs(opts) do
             if o == oldMonster then
@@ -918,144 +1246,41 @@ local MapDropdown = Tab_Autofarm:CreateDropdown({
 })
 
 local AutoQuestToggle = Tab_Autofarm:CreateToggle({
-    Name = "Auto Quest & Farm",
+    Name = "Auto Quest",
     CurrentValue = false,
-    Flag = "Toggle_AutoQuestFarm",
+    Flag = "Toggle_AutoQuest",
     Callback = function(Value)
-        _G.AutoQuestFarm = Value
+        _G.AutoQuest = Value
         
-        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
-        
-        while _G.AutoQuestFarm do
-            task.wait(0.1) -- Fast loop for smooth farming
+        while _G.AutoQuest do
+            task.wait(1)
             
-            -- Priority System: เช็คสถานะจริงๆ ว่ากำลังลง Trial หรือ Raid อยู่ไหม
-            if _G.AutoTrial and _G.IsTrialActive then
-                continue
-            end
-            
-            local inRaidMode = false
-            pcall(function()
-                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
-                    local Main = require(ps.Scripts.Client.Main)
-                    local mode = Main.Player:GetAttribute("Mode")
-                    if mode and string.find(string.lower(mode), "towerraid") then
-                        inRaidMode = true
+            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ•เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธย Trial/Raid
+            local isRaidBusy = _G.IsRaidActive
+            if not isRaidBusy then
+                if _G.AutoCreateRaid or _G.AutoJoinRaid then
+                    if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
+                        isRaidBusy = true
                     end
                 end
-            end)
-            
-            if inRaidMode then
-                continue
             end
             
-            -- แก้ไขไม่ให้ฟาร์มตีกัน: ถ้าระบบอื่น (Trial / Raid) ทำงานอยู่ ให้หยุดฟาร์ม
-            if _G.AutoTrial or _G.AutoRaid then
-                task.wait(1)
-                continue
-            end
+            if (_G.AutoTrial and _G.IsTrialActive) or isRaidBusy then continue end
             
             local activeMapKey = _G.SelectedQuestKey
-            
             local qData = QuestData[activeMapKey]
             if not qData then continue end
             
-            local moduleName = qData.Module
-            local npcName = qData.Npc
-            
-            -- ตรวจสอบว่าหลุดอยู่หน้า Lobby หรือเปล่า (เช่น เพิ่งออกมาจาก Trial)
-            local inLobby = false
-            pcall(function()
-                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
-                    local Main = require(ps.Scripts.Client.Main)
-                    if Main and Main.Player and Main.Player:GetAttribute("Mode") == "Lobby" then
-                        inLobby = true
-                    end
-                end
-            end)
-            
-            -- Fallback Lobby Check แบบปลอดภัย (แก้บัค Model Position)
-            if not inLobby and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                pcall(function()
-                    local trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
-                    if trialDoor then
-                        local tp
-                        if trialDoor:IsA("Model") then
-                            tp = trialDoor.PrimaryPart and trialDoor.PrimaryPart.Position or trialDoor:GetPivot().Position
-                        else
-                            tp = trialDoor.Position
-                        end
-                        if tp and (LocalPlayer.Character.HumanoidRootPart.Position - tp).Magnitude < 2000 then
-                            inLobby = true
-                        end
-                    end
-                end)
-            end
-            
-            local wrongMap = false
-            pcall(function()
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local cleanName = string.gsub(activeMapKey, " ", "")
-                    local mapFolder = workspace:FindFirstChild(cleanName) or (workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(cleanName))
-                    if mapFolder then
-                        local part = mapFolder:IsA("BasePart") and mapFolder or mapFolder:FindFirstChildWhichIsA("BasePart", true)
-                        if part then
-                            if (hrp.Position - part.Position).Magnitude > 5000 then 
-                                wrongMap = true
-                            end
-                        end
-                    else
-                        wrongMap = true
-                    end
-                end
-            end)
-            
-            if inLobby or wrongMap then
-                pcall(function()
-                    SafeUITeleport(moduleName)
-                end)
-                task.wait(3) -- รอแมพโหลด
-                continue
-            end
-            
-            
-
-            
-            -- ดึงข้อมูล Main แบบปลอดภัย ป้องกันสคริปต์ค้าง (Yield)
-            local Main = nil
-            pcall(function()
-                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                if ps then
-                    local s = ps:FindFirstChild("Scripts")
-                    if s then
-                        local c = s:FindFirstChild("Client")
-                        if c then
-                            local m = c:FindFirstChild("Main")
-                            if m then
-                                Main = require(m)
-                            end
-                        end
-                    end
-                end
-            end)
-            
             local hasQuest = false
-            
-            -- พึ่งพาระบบเช็คจากหน้าจอเสริมเป็นหลัก (ป้องกันบัครับเควสซ้อน/ค้าง)
             pcall(function()
+                local LocalPlayer = game:GetService("Players").LocalPlayer
                 if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
                     for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                         if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
                             local isVisible = true
                             local parent = obj
                             while parent and parent:IsA("GuiObject") do
-                                if not parent.Visible then
-                                    isVisible = false
-                                    break
-                                end
+                                if not parent.Visible then isVisible = false break end
                                 parent = parent.Parent
                             end
                             
@@ -1074,246 +1299,167 @@ local AutoQuestToggle = Tab_Autofarm:CreateToggle({
                 end
             end)
             
-            -- ถ้ายังไม่มีเควสต์ ให้ยิงรับเควสต์ของแมพนั้นทันที (ใช้ระบบดั้งเดิมที่เคยทำงานได้ 100%)
+            -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธโฌเน€เธยเน€เธเธเน€เธเธ เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย
             if not hasQuest then
                 pcall(function()
-                    -- ระบบเดิมที่เคยรับเควสต์ Tower City ได้สำเร็จ
-                    Bridge:FireServer("General", "Quest", "Accept", moduleName)
+                    local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+                    Bridge:FireServer("General", "Quest", "Accept", qData.Module)
                 end)
-                
-                task.wait(1.5) -- รอเซิร์ฟเวอร์อัปเดต Data
-                
-                local hasQuestAfter = false
-                pcall(function()
-                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
-                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                            if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
-                                local cleanText = string.gsub(obj.Text, "<[^>]+>", "")
-                                local m, curr, max = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
-                                if m and curr and max and tonumber(curr) < tonumber(max) then
-                                    local isVisible = true
-                                    local parent = obj
-                                    while parent and parent:IsA("GuiObject") do
-                                        if not parent.Visible then isVisible = false break end
-                                        parent = parent.Parent
-                                    end
-                                    if isVisible then hasQuestAfter = true break end
-                                end
-                            end
-                        end
+                task.wait(2) -- เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ข Quest GUI
+            end
+        end
+    end,
+})
+
+local AutoTeleportToggle = Tab_Autofarm:CreateToggle({
+    Name = "Auto Farm Monster",
+    CurrentValue = false,
+    Flag = "Toggle_AutoTeleport",
+    Callback = function(Value)
+        _G.AutoTeleport = Value
+        
+        while _G.AutoTeleport do
+            task.wait(0.1)
+            
+            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ•เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ—เน€เธยเน€เธย
+            if _G.AutoTrial and _G.IsTrialActive then continue end
+            
+            local isRaidBusy = _G.IsRaidActive
+            if not isRaidBusy then
+                if _G.AutoCreateRaid or _G.AutoJoinRaid then
+                    if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
+                        isRaidBusy = true
                     end
-                end)
-                
-                if _G.SelectedMonster == "Best ( Quest )" then
-                    _G.IsCurrentMapFinished = not hasQuestAfter
-                else
-                    _G.IsCurrentMapFinished = false
                 end
-            else
-                _G.IsCurrentMapFinished = false
             end
             
-            -- 2. ค้นหามอนสเตอร์เป้าหมาย
+            if (_G.AutoTowerRaid and _G.IsRaidActive) or isRaidBusy then continue end
+            
             local targetMonsterName = _G.SelectedMonster
             
-            -- 🌟 ระบบ Best ( Quest ) (หาตัวที่ยังตีไม่ครบ)
-            if targetMonsterName == "Best ( Quest )" then
-                local guiTarget = nil
-                pcall(function()
-                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
-                        local questObjectives = {}
-                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                                local text = obj.Text
-                                -- ลบ RichText tags ออกก่อนเพื่อความชัวร์
-                                local cleanText = string.gsub(text, "<[^>]+>", "")
-                                -- Match: Defeat 30 Mace Guardian (30/30) หรือ [30/30]
-                                local monsterName, currentStr, maxStr = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
-                                
-                                if monsterName and currentStr and maxStr then
-                                    local current = tonumber(currentStr)
-                                    local max = tonumber(maxStr)
-                                    
-                                    if current and max and current < max then
-                                        local yPos = obj.AbsolutePosition and obj.AbsolutePosition.Y or 0
-                                        table.insert(questObjectives, {
-                                            Monster = string.gsub(monsterName, "^%s*(.-)%s*$", "%1"),
-                                            Y = yPos,
-                                            Obj = obj
-                                        })
-                                    end
-                                end
-                            end
-                        end
-                        
-                        if #questObjectives > 0 then
-                            -- กรองเอาเฉพาะอันที่ Visible จริงๆ
-                            local visibleObjectives = {}
-                            for _, q in ipairs(questObjectives) do
-                                local isVisible = true
-                                local parent = q.Obj
-                                while parent and parent:IsA("GuiObject") do
-                                    if not parent.Visible then
-                                        isVisible = false
-                                        break
-                                    end
-                                    parent = parent.Parent
-                                end
-                                if isVisible then
-                                    table.insert(visibleObjectives, q)
-                                end
-                            end
-                            
-                            if #visibleObjectives == 0 then
-                                visibleObjectives = questObjectives
-                            end
-                            
-                            -- เรียงจากบนลงล่างตามตำแหน่ง Y
-                            table.sort(visibleObjectives, function(a, b) return a.Y < b.Y end)
-                            guiTarget = visibleObjectives[1].Monster
-                        end
-                    end
-                end)
-                
-                if guiTarget then
-                    targetMonsterName = guiTarget
-                else
-                    -- ถ้าหาจากหน้าจอ GUI ไม่เจอ ให้ใช้ระบบสำรอง (ดึงจาก Data)
-                    if hasQuest then
-                        targetMonsterName = nil
-                        pcall(function()
-                            local SharedQuest = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Quests"):WaitForChild(moduleName))
-                            local sortedList = {}
-                            for key, val in pairs(SharedQuest.List) do
-                                table.insert(sortedList, {key = key, data = val})
-                            end
-                            table.sort(sortedList, function(a, b) return a.key < b.key end)
-                            
-                            for _, item in ipairs(sortedList) do
-                                local key = item.key
-                                local v = item.data
-                                local rawData = Main.Data.Quest.List[v.Target] or Main.Data.Quest.List[string.gsub(v.Target, " ", "")] or Main.Data.Quest.List[key]
-                                local killed = 0
-                                if type(rawData) == "number" then killed = rawData
-                                elseif type(rawData) == "table" then killed = rawData.Amount or rawData.Progress or rawData.Value or 0 end
-                                
-                                if killed < v.Amount then
-                                    targetMonsterName = v.Target
-                                    break
-                                end
-                            end
-                        end)
-                    else
-                        targetMonsterName = qData.Monsters[1]
-                    end
-                end
-            end
-            
-            if targetMonsterName and targetMonsterName ~= "Auto Progress" then
+            -- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธเธ•เน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ“เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย Dropdown เน€เธโฌเน€เธโ€”เน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธย
+            if targetMonsterName and targetMonsterName ~= "Best ( Quest )" and targetMonsterName ~= "Auto Progress" then
                 local targetMonster = nil
                 local shortestDistance = math.huge
                 
-                -- ค้นหามอนสเตอร์ทั้งหมดใน Workspace
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    -- ตัดช่องว่างออกจากชื่อก่อนเทียบ ป้องกันปัญหาเช่น Target="AxeGuardian" แต่ Model="Axe Guardian"
-                    local cleanObjName = string.lower(string.gsub(obj.Name, "[^%w]", ""))
-                    local cleanTargetName = string.lower(string.gsub(targetMonsterName, "[^%w]", ""))
-                    
-                    local isNameMatch = (cleanObjName == cleanTargetName) or (string.find(cleanObjName, "^" .. cleanTargetName .. "lv%d+"))
-                    if isNameMatch and obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") and obj:FindFirstChild("Humanoid") then
-                        -- ตรวจสอบว่ายังมีชีวิตอยู่จริงไหม
-                        local isAlive = true
+                -- เน€เธเธเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธโฌเน€เธโ€เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ‘เน€เธย
+                local searchFolder = workspace
+                pcall(function()
+                    local activeMapKey = _G.SelectedQuestKey or ""
+                    local cleanName = string.gsub(activeMapKey, " ", "")
+                    local mapFolder = workspace:FindFirstChild(cleanName) or (workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(cleanName))
+                    if mapFolder then
+                        searchFolder = mapFolder:FindFirstChild("Monsters") or mapFolder:FindFirstChild("Enemies") or mapFolder
+                    end
+                end)
+                
+                -- เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย
+                for _, obj in ipairs(searchFolder:GetDescendants()) do
+                    if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") and obj:FindFirstChild("Humanoid") then
+                        local cleanObjName = string.lower(string.gsub(obj.Name, "[^%w]", ""))
+                        local cleanTargetName = string.lower(string.gsub(targetMonsterName, "[^%w]", ""))
                         
-                        -- เช็คระบบเลือดแยกจาก Attribute เป็นหลัก (บางเกมเลือด Humanoid = 0 แต่ยังไม่ตาย)
-                        if obj:GetAttribute("Health") ~= nil then
-                            if obj:GetAttribute("Health") <= 0 then
-                                isAlive = false
-                            end
-                        else
-                            if obj.Humanoid.Health <= 0 then
-                                isAlive = false
-                            end
-                        end
+                        local isNameMatch = (cleanObjName == cleanTargetName) or (string.find(cleanObjName, cleanTargetName) ~= nil)
                         
-                        -- เช็คสถานะการตายจาก Attribute
-                        if obj:GetAttribute("Dead") == true or obj:GetAttribute("Died") == true or obj:GetAttribute("IsDead") == true then
-                            isAlive = false
-                        end
-                        -- เช็คสถานะจาก Humanoid โดยตรง
-                        if obj.Humanoid:GetState() == Enum.HumanoidStateType.Dead then
-                            isAlive = false
-                        end
-                        
-                        if isAlive then
-                            -- หามอนสเตอร์ที่ใกล้ที่สุด
-                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.HumanoidRootPart.Position).Magnitude
-                                if dist < shortestDistance then
-                                    shortestDistance = dist
-                                    targetMonster = obj
-                                end
+                        if isNameMatch then
+                            local isAlive = true
+                            
+                            if obj:GetAttribute("Health") ~= nil then
+                                if obj:GetAttribute("Health") <= 0 then isAlive = false end
                             else
-                                targetMonster = obj
-                                break
+                                if obj.Humanoid.Health <= 0 then isAlive = false end
+                            end
+                            if obj:GetAttribute("Dead") == true or obj:GetAttribute("Died") == true or obj:GetAttribute("IsDead") == true then isAlive = false end
+                            if obj.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
+                            
+                            if isAlive then
+                                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.HumanoidRootPart.Position).Magnitude
+                                    if dist < shortestDistance then
+                                        shortestDistance = dist
+                                        targetMonster = obj
+                                    end
+                                else
+                                    targetMonster = obj
+                                    break
+                                end
                             end
                         end
                     end
                 end
                 
-                -- 3. ถ้าเจอมอนสเตอร์ ให้วาร์ปไปตี
-                if targetMonster then
-                    _G.NoMonsterTimer = 0
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = LocalPlayer.Character.HumanoidRootPart
-                        local dist = (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude
-                        
-                        if dist > 15000 then
-                            -- แมพอยู่ไกลมาก ให้ใช้ระบบเทเลพอร์ตข้ามเกาะแทน
+                -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธย
+                if targetMonster and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = LocalPlayer.Character.HumanoidRootPart
+                    local dist = (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude
+                    
+                    if dist > 15000 then
+                        -- เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธโฌเน€เธยเน€เธเธ”เน€เธย เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธโฌเน€เธยเน€เธเธ’เน€เธเธ
+                        local activeMapKey = _G.SelectedQuestKey
+                        local qData = QuestData[activeMapKey]
+                        if qData and qData.Module then
                             pcall(function()
-                                SafeUITeleport(moduleName)
+                                SafeUITeleport(qData.Module)
                             end)
                             task.wait(1.5)
-                        else
-                            -- อัปเดตวาร์ปเมื่อ 1) เปลี่ยนเป้าหมายมอนสเตอร์ (จาก Dropdown หรือเควสเลื่อน) 2) อยู่ไกลเกิน 15 Studs (โดนตีปลิวหรือเพิ่งกลับจาก Raid)
-                            if _G.CurrentQuestTarget ~= targetMonster or (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude > 15 then
-                                _G.CurrentQuestTarget = targetMonster
-                                hrp.CFrame = targetMonster.HumanoidRootPart.CFrame * CFrame.new(0, 3, 4)
+                        end
+                    else
+                        -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย
+                        if (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude > 15 then
+                            local mCFrame = targetMonster.HumanoidRootPart.CFrame
+                            local mPos = targetMonster.HumanoidRootPart.Position
+                            
+                            -- เน€เธยเน€เธเธ“เน€เธยเน€เธเธเน€เธโ€เน€เธโฌเน€เธเธเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธย (เน€เธโ€ขเน€เธเธ‘เน€เธโ€เน€เธยเน€เธยเน€เธย Y เน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธเธ”เน€เธยเน€เธโ€ขเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย)
+                            local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
+                            if flatLook.Magnitude > 0.001 then
+                                flatLook = flatLook.Unit
+                            else
+                                flatLook = Vector3.new(0, 0, -1)
                             end
                             
-                            -- เซ็ตความเร็วเป็น 0 เพื่อป้องกันอาการตกหล่นหรือลื่น
-                            hrp.Velocity = Vector3.new(0, 0, 0)
+                            -- เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย 5 Studs เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธย
+                            local behindPos = mPos - (flatLook * 5)
                             
-                            -- ยิงคำสั่งโจมตีรัวๆ และสั่ง Fighters ให้เดินไปตี
-                            pcall(function()
-                                Bridge:FireServer("Fighters", "Click", "Damage")
-                                Bridge:FireServer("Fighters", "Move", "Attack", targetMonster:GetAttribute("Location") or targetMonster.HumanoidRootPart.Position, targetMonster)
-                                
-                                -- สั่งตัวละครโจมตี (Attack)
-                                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
-                                if tool then
-                                    LocalPlayer.Character.Humanoid:EquipTool(tool)
-                                    tool:Activate()
-                                end
-                                
-                                -- Removed VirtualUser clicking to prevent unwanted UI clicks
-                                -- local vu = game:GetService("VirtualUser")
-                                -- vu:CaptureController()
-                                -- vu:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                                -- vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                            end)
+                            -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ข CFrame (เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธโ€ขเน€เธยเน€เธโ€“เน€เธเธเน€เธเธเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธย 5 Studs)
+                            hrp.CFrame = CFrame.new(behindPos, mPos)
                         end
+                        hrp.Velocity = Vector3.new(0, 0, 0)
                     end
-                else
-                    -- ถ้าหามอนไม่เจอเกิน 15 วินาที แปลว่าหลุดไปอยู่ด่านอื่น (เช่น Trade) ให้บังคับวาร์ปกลับ!
-                    _G.NoMonsterTimer = (_G.NoMonsterTimer or 0) + 1
-                    if _G.NoMonsterTimer > 15 and not _G.IsCurrentMapFinished then
-                        _G.NoMonsterTimer = 0
+                elseif not targetMonster then
+                    -- เน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธเธเน€เธเธ’เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธย (เน€เธโฌเน€เธยเน€เธยเน€เธย เน€เธโฌเน€เธยเน€เธเธ”เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย Trial/Raid)
+                    local activeMapKey = _G.SelectedQuestKey
+                    local qData = QuestData[activeMapKey]
+                    if qData and qData.Module then
+                        local mode = ""
                         pcall(function()
-                            SafeUITeleport(moduleName)
+                            mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode") or ""
                         end)
-                        task.wait(3)
-                    else
-                        task.wait(1)
+                        if mode ~= qData.Module then
+                            if mode == "Trade" or mode == "TowerCity" then
+                                -- เน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธเธ…เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Lobby เน€เธยเน€เธยเน€เธเธเน€เธย
+                                pcall(function()
+                                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                    if hrp then
+                                        local mapFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(mode)
+                                        if mapFolder then
+                                            for _, v in ipairs(mapFolder:GetDescendants()) do
+                                                if v:IsA("BasePart") and (string.match(string.lower(v.Name), "portal") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave")) then
+                                                    hrp.CFrame = v.CFrame
+                                                    task.wait(0.5)
+                                                end
+                                            end
+                                        end
+                                    end
+                                    SafeUITeleport("StarterTown")
+                                end)
+                                task.wait(3)
+                            else
+                                pcall(function()
+                                    SafeUITeleport(qData.Module)
+                                end)
+                                task.wait(2.5)
+                            end
+                        end
                     end
                 end
             end
@@ -1347,12 +1493,12 @@ Tab_Autofarm:CreateToggle({
             task.wait(1)
             
             pcall(function()
-                -- ถ้าด่านปัจจุบันยังไม่เคลียร์ หรือไม่ได้เปิด AutoQuest อยู่ ก็ไม่ต้องทำอะไร
-                if not _G.AutoQuestFarm or not _G.IsCurrentMapFinished then return end
+                -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€ AutoQuest เน€เธเธเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธยเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ“เน€เธเธเน€เธเธเน€เธยเน€เธเธ
+                if not _G.AutoQuestFarm then return end
                 
                 local activeMapKey = _G.SelectedQuestKey
                 
-                -- หา Index ของแมพปัจจุบัน
+                -- เน€เธเธเน€เธเธ’ Index เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ‘เน€เธย
                 local currentIndex = 0
                 for i, mapName in ipairs(MapOrderList) do
                     if mapName == activeMapKey then
@@ -1361,16 +1507,16 @@ Tab_Autofarm:CreateToggle({
                     end
                 end
                 
-                -- ถ้าไม่ใช่แมพสุดท้าย (ยังมีแมพถัดไป)
+                -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธโ€”เน€เธยเน€เธเธ’เน€เธเธ (เน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโ€“เน€เธเธ‘เน€เธโ€เน€เธยเน€เธย)
                 if currentIndex > 0 and currentIndex < #MapOrderList then
                     local nextMapName = MapOrderList[currentIndex + 1]
                     local nextMapCost = MapUnlockCost[nextMapName] or math.huge
                     
-                    -- เช็คเงิน (Coins) พร้อมระบบกรองตัวอักษรและลูกน้ำ
+                    -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธย (Coins) เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ…เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ“
                     local myCoins = 0
 
                     if LocalPlayer:FindFirstChild("leaderstats") then
-                        local c = LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("💰 Coins") or LocalPlayer.leaderstats:FindFirstChild("Yen")
+                        local c = LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("เนยโ€เธ Coins") or LocalPlayer.leaderstats:FindFirstChild("Yen")
                         if c then
                             myCoins = parseCoins(c.Value)
                         else
@@ -1389,22 +1535,48 @@ Tab_Autofarm:CreateToggle({
                             moduleName = QuestData[nextMapName].Module
                         end
                         
-                        -- ซื้อแมพถัดไป (ลองหลายๆ รูปแบบเพื่อความชัวร์ รวมถึงชื่อ Module)
-                        Bridge:FireServer("General", "Portal", "Unlock", moduleName)
-                        Bridge:FireServer("General", "Portal", "Buy", moduleName)
-                        Bridge:FireServer("General", "Portal", "Unlock", nextMapName)
+                        -- เน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ”เน€เธย Remote เน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธโ€”เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธย
+                        local remotesToTry = {moduleName, nextMapName, string.upper(moduleName), string.lower(moduleName)}
+                        for _, name in ipairs(remotesToTry) do
+                            pcall(function() Bridge:FireServer("General", "Portal", "Buy", name) end)
+                            pcall(function() Bridge:FireServer("General", "Portal", "Unlock", name) end)
+                            pcall(function() Bridge:FireServer("Portal", "Buy", name) end)
+                        end
                         
-                        -- ใช้ Remote ซื้อ/ปลดล็อคแมพถัดไป (เรายิง Remote ไปแล้วด้านบน)
+                        -- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธย Lobby เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโฌเน€เธโ€เน€เธเธ”เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Portal เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธย
+                        pcall(function() SafeUITeleport("Lobby") end)
+                        task.wait(3.5)
                         
-                        task.wait(1.5)
+                        -- เน€เธโ€เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ”เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ Buy / Unlock เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธ (เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธโฌเน€เธโ€เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโ€ขเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ—เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธเธเน€เธเธ’)
+                        task.spawn(function()
+                            for i = 1, 15 do
+                                pcall(function()
+                                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                                            if obj:IsA("TextButton") and obj.Text ~= "" then
+                                                local txt = string.lower(obj.Text)
+                                                if string.find(txt, "buy") or string.find(txt, "unlock") or string.find(txt, "purchase") or string.find(txt, "yes") then
+                                                    if getconnections then
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
+                                                            conn:Fire()
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end)
+                                task.wait(0.5)
+                            end
+                        end)
                         
-                        -- เปลี่ยนตัวเลือกเป้าหมายไปแมพใหม่
+                        -- เน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย
                         _G.SelectedQuestKey = nextMapName
                         if MapDropdown then
                             MapDropdown:Set({nextMapName})
                         end
                         
-                        -- รีเซ็ตสถานะว่าเคลียร์ด่านแล้ว เพื่อให้ AutoQuest ทำงานกับด่านใหม่
+                        -- เน€เธเธเน€เธเธ•เน€เธโฌเน€เธยเน€เธยเน€เธโ€ขเน€เธเธเน€เธโ€“เน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย AutoQuest เน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย
                         _G.IsCurrentMapFinished = false
                     end
                 end
@@ -1427,6 +1599,149 @@ Tab_Trial:CreateSlider({
     end,
 })
 
+Tab_Trial:CreateToggle({
+    Name = "Auto Leave at Max Wave",
+    CurrentValue = false,
+    Flag = "Toggle_AutoLeaveTrial",
+    Callback = function(Value)
+        _G.AutoLeaveTrial = Value
+        if Value then
+            task.spawn(function()
+                while _G.AutoLeaveTrial do
+                    task.wait(1)
+                    
+                    local inTrialMode = false
+                    pcall(function()
+                        local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                        if mode and string.find(string.lower(mode), "trial") then
+                            inTrialMode = true
+                        end
+                    end)
+                    
+                    if inTrialMode then
+                        local currentWave = 1
+                        pcall(function()
+                            local rsTrial = game:GetService("ReplicatedStorage"):FindFirstChild("Gamemodes")
+                            if rsTrial and rsTrial:FindFirstChild("Trial") and rsTrial.Trial:FindFirstChild("Wave") then
+                                currentWave = tonumber(rsTrial.Trial.Wave.Value) or currentWave
+                            end
+                            if currentWave == 1 then
+                                local trialUI = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("Trial")
+                                if trialUI and trialUI:FindFirstChild("Frame") and trialUI.Frame:FindFirstChild("Wave") then
+                                    local w = string.match(trialUI.Frame.Wave.Text, "%d+")
+                                    if w then currentWave = tonumber(w) end
+                                else
+                                    for _, obj in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+                                        if obj:IsA("TextLabel") and obj.Visible then
+                                            local lowerText = string.lower(obj.Text)
+                                            if string.find(lowerText, "wave") and not string.find(lowerText, "next") and not string.find(lowerText, "in") then
+                                                local w = string.match(lowerText, "wave%s*:?%s*(%d+)")
+                                                if not w then w = string.match(obj.Text, "%d+") end
+                                                if w then currentWave = tonumber(w) break end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        
+                        local maxWave = _G.MaxTrialWave or 999
+                        if maxWave <= 0 then maxWave = 999 end
+                        
+                        if currentWave >= maxWave then
+                            local hrp = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                pcall(function()
+                                    local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+                                    Bridge:FireServer("Gamemodes", "Trial", "Leave")
+                                    Bridge:FireServer("Gamemodes", "Trial", "Claim")
+                                    Bridge:FireServer("Gamemodes", "Trial", "Exit")
+                                end)
+                                
+                                pcall(function()
+                                    local lp = game:GetService("Players").LocalPlayer
+                                    if lp and lp:FindFirstChild("PlayerGui") then
+                                        for _, obj in ipairs(lp.PlayerGui:GetDescendants()) do
+                                            if obj:IsA("TextButton") and obj.Text ~= "" then
+                                                local lowerText = string.lower(obj.Text)
+                                                local cleanText = string.gsub(lowerText, "^%s*(.-)%s*$", "%1")
+                                                if cleanText == "leave" or cleanText == "claim" or cleanText == "exit" or cleanText == "continue" or cleanText == "claim rewards" then
+                                                    local isVisible = true
+                                                    local parent = obj
+                                                    while parent and parent:IsA("GuiObject") do
+                                                        if not parent.Visible then isVisible = false break end
+                                                        parent = parent.Parent
+                                                    end
+                                                    if isVisible and getconnections then
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
+                                                            conn:Fire()
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end)
+                                
+                                task.wait(1.5)
+                                
+                                pcall(function()
+                                    local hrp2 = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                    if hrp2 then
+                                        local trialMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
+                                        if trialMap then
+                                            for _, v in ipairs(trialMap:GetDescendants()) do
+                                                local vName = string.lower(v.Name)
+                                                if v:IsA("ProximityPrompt") or ((string.match(vName, "exit") or string.match(vName, "leave")) and not string.match(vName, "trade")) then
+                                                    local target = v:IsA("ProximityPrompt") and v.Parent or v
+                                                    if target and (target:IsA("BasePart") or target:IsA("Model")) then
+                                                        hrp2.CFrame = target:IsA("Model") and target:GetPivot() or target.CFrame
+                                                        task.wait(0.5)
+                                                        if v:IsA("ProximityPrompt") and fireproximityprompt then
+                                                            fireproximityprompt(v)
+                                                        end
+                                                        break
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end)
+                                
+                                -- เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ…เน€เธโ€เน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธย Lobby เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธย Quest Map เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€เน€เธเธ–เน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’
+                                local waitCount = 0
+                                while _G.AutoLeaveTrial and waitCount < 10 do
+                                    task.wait(1)
+                                    waitCount = waitCount + 1
+                                    local currentMode = ""
+                                    pcall(function()
+                                        currentMode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                                    end)
+                                    if currentMode == "Lobby" or currentMode == "Town" then
+                                        local targetMap = _G.SelectedQuestKey or "LevelingCity"
+                                        local qData = QuestData[targetMap]
+                                        
+                                        local TeleportFunc = function(dest)
+                                            pcall(function() game:GetService("ReplicatedStorage").Gamemodes.WorldTeleport.Teleport:FireServer(dest) end)
+                                        end
+                                        
+                                        if qData and qData.Module then
+                                            TeleportFunc(qData.Module)
+                                        else
+                                            TeleportFunc("LevelingCity")
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end,
+})
+
 local AutoTrialToggle = Tab_Trial:CreateToggle({
     Name = "Auto Farm Trial",
     CurrentValue = false,
@@ -1435,7 +1750,7 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
         _G.AutoTrial = Value
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         
-        -- ตัวแปรเก็บประวัติการลง Trial เพื่อไม่ให้ลงซ้ำในรอบเวลาเดิม
+        -- เน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธ‘เน€เธโ€ขเน€เธเธ”เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ…เน€เธย Trial เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธ
         _G.LastTrialCompletedHour = _G.LastTrialCompletedHour or -1
         _G.LastTrialCompletedHalf = _G.LastTrialCompletedHalf or -1
         _G.HasJoinedTrialLobby = false
@@ -1443,9 +1758,6 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
         while _G.AutoTrial do
             task.wait(1)
             
-            if _G.AutoRaid then
-                continue
-            end
             
             local inTrialMode = false
             pcall(function()
@@ -1462,14 +1774,15 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                                 inTrialMode = true
                             end
                         end
-                        -- ป้องกันการสับสนระหว่างด่าน
+                        -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธย
                         if workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid") then
                             inTrialMode = false
                         elseif workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") then
                             inTrialMode = true
                         end
-                        if mode == "Lobby" or mode == "Town" then
+                        if mode == "Lobby" or mode == "Town" or mode == "Trade" then
                             _G.InTrialFlag = false
+                            inTrialMode = false
                         end
                     end
                 end
@@ -1477,7 +1790,7 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
             
             if _G.InTrialFlag then
                 inTrialMode = true
-                -- ตรวจสอบว่าถ้ากลับมาอยู่หน้าประตูแล้ว (ตาย/จบรอบ) ให้ยกเลิก Flag
+                -- เน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธ (เน€เธโ€ขเน€เธเธ’เน€เธเธ/เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย) เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ”เน€เธย Flag
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     pcall(function()
@@ -1506,26 +1819,31 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
             local min = currentTime.min
             local hour = currentTime.hour
             
-            -- ช่วงเวลาที่ดันเจี้ยนเปิดคือต้นชั่วโมง (XX:00) และครึ่งชั่วโมง (XX:30)
-            -- เราจะดักรอช่วง XX:58 ถึง XX:03 และ XX:28 ถึง XX:33
+            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโ€”เน€เธเธ•เน€เธยเน€เธโ€เน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธยเน€เธเธ—เน€เธเธเน€เธโ€ขเน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย (XX:00) เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ–เน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย (XX:30)
+            -- เน€เธโฌเน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธโ€เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย XX:58 เน€เธโ€“เน€เธเธ–เน€เธย XX:03 เน€เธยเน€เธเธ…เน€เธเธ XX:28 เน€เธโ€“เน€เธเธ–เน€เธย XX:33
             local isTrialWindow = false
             local currentHalf = 0
             
-            if (min >= 1 and min <= 4) then
+            if (min >= 59 or min <= 1) then
                 isTrialWindow = true
                 currentHalf = 0
-            elseif min >= 31 and min <= 34 then
+            elseif (min >= 29 and min <= 31) then
                 isTrialWindow = true
                 currentHalf = 1
             end
             
-            local alreadyCompleted = (_G.LastTrialCompletedHour == hour and _G.LastTrialCompletedHalf == currentHalf)
+            local trackHour = hour
+            if min >= 59 then
+                trackHour = (hour + 1) % 24
+            end
+            
+            local alreadyCompleted = (_G.LastTrialCompletedHour == trackHour and _G.LastTrialCompletedHalf == currentHalf)
             
             _G.IsTrialActive = inTrialMode or (isTrialWindow and not alreadyCompleted)
             
             if not inTrialMode then
                 if isTrialWindow and not alreadyCompleted then
-                    -- เช็คว่าติดอยู่ใน Raid หรือไม่
+                    -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธโ€ขเน€เธเธ”เน€เธโ€เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธย Raid เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธย
                     local isInRaid = false
                     pcall(function()
                         local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
@@ -1534,15 +1852,8 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                         end
                     end)
                     
-                    if isInRaid then
-                        -- ประนีประนอมกับระบบ Raid: ถ้าเพิ่งเข้า Trial Window ให้รอจนกว่า Raid จะจบ
-                        -- แต่ถ้าใกล้จะหมดเวลา Trial (นาทีที่ 3-4 หรือ 33-34) ค่อยบังคับเตะออก
-                        if not (min == 3 or min == 4 or min == 33 or min == 34) then
-                            continue -- ปล่อยให้ฟาร์ม Raid ต่อไปก่อน
-                        end
-                    end
                     
-                    -- ถ้าไม่ได้อยู่ใน Raid หรือถึงเวลาต้องบังคับออกแล้ว
+                    -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธย Raid เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโ€ขเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ
                     pcall(function()
                         if isInRaid then
                             Bridge:FireServer("Gamemodes", "TowerRaid", "Leave")
@@ -1574,7 +1885,7 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                         end
                     end)
                     
-                    -- 1. ยังไม่ได้ลงรอบนี้ และถึงเวลาแล้ว -> วาร์ปไปเตรียมตัวที่ Lobby
+                    -- 1. เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธย เน€เธยเน€เธเธ…เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธยเน€เธเธ…เน€เธยเน€เธเธ -> เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโ€”เน€เธเธ•เน€เธย Lobby
                     local trialDoor = nil
                     pcall(function()
                         trialDoor = workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
@@ -1615,31 +1926,27 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                             end
                         end
                     else
-                        -- เจอประตู Trial แล้ว (เวลา XX:00)
+                        -- เน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ Trial เน€เธยเน€เธเธ…เน€เธยเน€เธเธ (เน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’ XX:00)
                         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then
                             local part = trialDoor:FindFirstChildWhichIsA("BasePart", true)
                             if part then
-                                local targetPos = part.Position
-                                local targetCFrame = part.CFrame
-                                
-                                -- เทเลพอร์ตไปใกล้ๆ ประตูเฉพาะตอนที่อยู่ไกล
-                                local dist = (hrp.Position - targetPos).Magnitude
-                                if dist > 15 then
-                                    hrp.CFrame = targetCFrame * CFrame.new(0, 5, 0)
+                                local dist = (hrp.Position - part.Position).Magnitude
+                                if dist > 10 then
+                                    hrp.CFrame = part.CFrame
                                     hrp.Velocity = Vector3.new(0,0,0)
                                     task.wait(0.5)
                                 end
                             end
                             
-                            -- ยิงคำสั่งเข้า Trial รัวๆ ทุก 2 วินาที จนกว่าจะโดนดึงเข้าห้อง (inTrialMode จะกลายเป็น true และหยุดลูปนี้เอง)
+                            -- เน€เธเธเน€เธเธ”เน€เธยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’ Trial เน€เธเธเน€เธเธ‘เน€เธเธเน€เธย เน€เธโ€”เน€เธเธเน€เธย 2 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธโ€เน€เธเธ–เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธเน€เธย (inTrialMode เน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ’เน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธย true เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธโ€เน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธยเน€เธโฌเน€เธเธเน€เธย)
                             pcall(function()
                                 local prompt = trialDoor:FindFirstChildWhichIsA("ProximityPrompt", true)
                                 if prompt and fireproximityprompt then
                                     fireproximityprompt(prompt)
                                 end
                                 Bridge:FireServer("Gamemodes", "Trial", "Join")
-                                _G.InTrialFlag = true -- ตั้งค่าว่าเข้าไปใน Trial แล้ว
+                                _G.InTrialFlag = true -- เน€เธโ€ขเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธยเน€เธย Trial เน€เธยเน€เธเธ…เน€เธยเน€เธเธ
                                 
                                 local confirmUI = LocalPlayer.PlayerGui:FindFirstChild("Confirmation")
                                 if confirmUI and confirmUI.Enabled then
@@ -1653,13 +1960,37 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                 else
                     if _G.WasInTrial then
                         local safeToWarp = false
-                        local trialFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
-                        if not trialFolder then
+                        local mode = ""
+                        pcall(function()
+                            mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                        end)
+                        if mode == "Lobby" or mode == "Town" or mode == "Trade" or mode == "TowerCity" then
                             safeToWarp = true
                         end
+                        
+                        -- Fallback just in case Mode isn't set
+                        if not safeToWarp then
+                            local trialMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Map")
+                            if not trialMap then
+                                safeToWarp = true
+                            end
+                        end
+                        
                         if safeToWarp then
                             _G.WasInTrial = false
                             _G.HasJoinedTrialLobby = false
+                            
+                            -- Teleport back to selected map when exiting Trial
+                            if _G.SelectedQuestKey then
+                                local activeMapKey = _G.SelectedQuestKey
+                                local qData = QuestData[activeMapKey]
+                                if qData and qData.Module then
+                                    pcall(function()
+                                        SafeUITeleport(qData.Module)
+                                    end)
+                                    task.wait(2.5)
+                                end
+                            end
                         end
                     end
                 end
@@ -1667,8 +1998,8 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                 _G.WasInTrial = true
                 _G.HasJoinedTrialLobby = false
                 
-                -- ประทับตราว่าลงสำเร็จแล้วตั้งแต่เริ่มเข้าเลย ป้องกันบัคเข้าซ้ำ
-                _G.LastTrialCompletedHour = hour
+                -- เน€เธยเน€เธเธเน€เธเธเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ’เน€เธเธ…เน€เธยเน€เธเธเน€เธเธ“เน€เธโฌเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธยเน€เธโฌเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธเธ…เน€เธเธ เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ“
+                _G.LastTrialCompletedHour = trackHour
                 _G.LastTrialCompletedHalf = currentHalf
                 
                 local currentWave = 1
@@ -1677,94 +2008,29 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                     if rsTrial and rsTrial:FindFirstChild("Trial") and rsTrial.Trial:FindFirstChild("Wave") then
                         currentWave = tonumber(rsTrial.Trial.Wave.Value) or currentWave
                     end
-                end)
-                
-                local maxWave = _G.MaxTrialWave or 999
-                if maxWave <= 0 then maxWave = 999 end
-                
-                if currentWave >= maxWave then
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        -- 1. พยายามยิง Remote ออกจากดันเจี้ยน (ลองหลายชื่อเผื่อเกมเปลี่ยน)
-                        pcall(function()
-                            Bridge:FireServer("Gamemodes", "Trial", "Leave")
-                            Bridge:FireServer("Gamemodes", "Trial", "Claim")
-                            Bridge:FireServer("Gamemodes", "Trial", "Exit")
-                        end)
-                        
-                        -- 2. พยายามกดปุ่ม UI เผื่อ Remote ไม่ทำงาน (ปัญหาที่คุณบอกว่ามันไม่ได้กด UI)
-                        pcall(function()
-                            if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
-                                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                                    if obj:IsA("TextButton") and obj.Text ~= "" then
-                                        local lowerText = string.lower(obj.Text)
-                                        if string.find(lowerText, "leave") or string.find(lowerText, "claim") or string.find(lowerText, "exit") or string.find(lowerText, "continue") then
-                                            -- เช็คว่า UI มองเห็นอยู่ไหม
-                                            local isVisible = true
-                                            local parent = obj
-                                            while parent and parent:IsA("GuiObject") do
-                                                if not parent.Visible then isVisible = false break end
-                                                parent = parent.Parent
-                                            end
-                                            
-                                            if isVisible and getconnections then
-                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
-                                                    conn:Fire()
-                                                end
-                                            end
+                    
+                    if currentWave == 1 then
+                        local trialUI = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("Trial")
+                        if trialUI and trialUI:FindFirstChild("Frame") and trialUI.Frame:FindFirstChild("Wave") then
+                            local w = string.match(trialUI.Frame.Wave.Text, "%d+")
+                            if w then currentWave = tonumber(w) end
+                        else
+                            for _, obj in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+                                if obj:IsA("TextLabel") and obj.Visible then
+                                    local lowerText = string.lower(obj.Text)
+                                    if string.find(lowerText, "wave") and not string.find(lowerText, "next") and not string.find(lowerText, "in") then
+                                        local w = string.match(lowerText, "wave%s*:?%s*(%d+)")
+                                        if not w then
+                                            w = string.match(obj.Text, "%d+")
                                         end
+                                        if w then currentWave = tonumber(w) break end
                                     end
                                 end
                             end
-                        end)
-                        
-                        task.wait(1.5)
-                        
-                        -- สัมผัสประตู Exit เผื่อว่า Remote ไม่ทำงานและไม่ได้กด UI
-                        pcall(function()
-                            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            if hrp then
-                                local trialMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
-                                if trialMap then
-                                    for _, v in ipairs(trialMap:GetDescendants()) do
-                                        if v:IsA("ProximityPrompt") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave") then
-                                            local target = v:IsA("ProximityPrompt") and v.Parent or v
-                                            if target and (target:IsA("BasePart") or target:IsA("Model")) then
-                                                hrp.CFrame = target:IsA("Model") and target:GetPivot() or target.CFrame
-                                                task.wait(0.5)
-                                                if v:IsA("ProximityPrompt") and fireproximityprompt then
-                                                    fireproximityprompt(v)
-                                                end
-                                                break
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end)
-                        task.wait(1.5)
-                        
-                        pcall(function()
-                            local targetMap = _G.SelectedQuestKey or "LevelingCity"
-                            local qData = QuestData[targetMap]
-                            if qData and qData.Module then
-                                SafeUITeleport(qData.Module)
-                            else
-                                SafeUITeleport("LevelingCity")
-                            end
-                            task.delay(7, TeleportToSelectedMonster)
-                        end)
-                        
-                        task.wait(2)
-                        
-                        -- เคลียร์สถานะดันเจี้ยน
-                        _G.WasInTrial = true
-                        _G.HasJoinedTrialLobby = false
-                        -- ห้ามใช้ break ตรงนี้เด็ดขาด เพราะจะทำให้ระบบ Auto Trial พังและปิดตัวเองไปเลย
+                        end
                     end
-                    continue
-                end
-                
+                end)
+
                 local trialFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
                 local trialEnemiesFolder = trialFolder and trialFolder:FindFirstChild("Enemies")
                 
@@ -1802,15 +2068,27 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
                     end
                     
                     if targetEnemy and playerHRP then
-                        -- กลับมาใช้วิธีล็อคพิกัดโลก (World Space) ป้องกันจมดิน
-                        playerHRP.CFrame = CFrame.new(targetHRP.Position + Vector3.new(0, 3, 0), targetHRP.Position)
+                        local mCFrame = targetHRP.CFrame
+                        local mPos = targetHRP.Position
+                        
+                        -- เน€เธยเน€เธเธ“เน€เธยเน€เธเธเน€เธโ€เน€เธโฌเน€เธเธเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธย (เน€เธโ€ขเน€เธเธ‘เน€เธโ€เน€เธยเน€เธยเน€เธย Y เน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธเธ”เน€เธยเน€เธโ€ขเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย)
+                        local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
+                        if flatLook.Magnitude > 0.001 then
+                            flatLook = flatLook.Unit
+                        else
+                            flatLook = Vector3.new(0, 0, -1)
+                        end
+                        
+                        -- เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย 5 Studs เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธย
+                        local behindPos = mPos - (flatLook * 5)
+                        playerHRP.CFrame = CFrame.new(behindPos, mPos)
                         playerHRP.Velocity = Vector3.new(0, 0, 0)
                         
                         pcall(function()
                             Bridge:FireServer("Fighters", "Click", "Damage")
                             Bridge:FireServer("Fighters", "Move", "Attack", targetEnemy:GetAttribute("Location") or targetHRP.Position, targetEnemy)
                             
-                            -- สั่งตัวละครโจมตี (Attack)
+                            -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ• (Attack)
                             local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
                             if tool then
                                 LocalPlayer.Character.Humanoid:EquipTool(tool)
@@ -1846,7 +2124,7 @@ Tab_OpenStar:CreateToggle({
                     pcall(function()
                         Bridge:FireServer("Fighters", "Inventory", "EquipBest")
                     end)
-                    task.wait(60) -- ทุกๆ 1 นาที
+                    task.wait(60) -- เน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -1854,11 +2132,11 @@ Tab_OpenStar:CreateToggle({
 })
 
 -- ==========================================
--- 🌟 AUTO GACHA TAB
+-- เนยยย AUTO GACHA TAB
 -- ==========================================
 local Section_Gacha = Tab_OpenStar:CreateSection("Summoning")
 
--- ดึงรายชื่อด่านทั้งหมดมาใส่ให้เลือกสุ่มดาว
+-- เน€เธโ€เน€เธเธ–เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโ€เน€เธเธ’เน€เธเธ
 local StarMapList = {}
 for mapName, _ in pairs(QuestData) do
     table.insert(StarMapList, mapName)
@@ -1873,7 +2151,7 @@ Tab_OpenStar:CreateDropdown({
     Callback = function(Option)
         _G.SelectedStarMap = type(Option) == "table" and Option[1] or Option
         
-        -- ถ้าไม่ได้ลง Trial และไม่ได้ลง Raid ให้วาร์ปไปด่านสุ่มไข่ที่เลือกทันที
+        -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธย Trial เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธย Raid เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•
         task.spawn(function()
             local inRaidMode = false
             pcall(function()
@@ -1895,14 +2173,14 @@ Tab_OpenStar:CreateDropdown({
                 if qData and qData.Module then
                     local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
                     pcall(function()
-                        -- หยุดสุ่มก่อนวาป
+                        -- เน€เธเธเน€เธเธเน€เธเธเน€เธโ€เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธย
                         Bridge:FireServer("General", "Star", "Auto", false)
                         task.wait(0.5)
                         
                         SafeUITeleport(qData.Module)
                         task.wait(2)
                         
-                        -- เริ่มสุ่มใหม่ (ถ้าปุ่ม Auto เปิดอยู่)
+                        -- เน€เธโฌเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย (เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธ Auto เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธเธเน€เธเธเน€เธเธเน€เธย)
                         if _G.FastAutoStar then
                             Bridge:FireServer("General", "Star", "Auto", true)
                         end
@@ -1932,7 +2210,7 @@ Tab_OpenStar:CreateToggle({
                 end)
             end)
         else
-            -- ปิดเมื่อปิด Toggle
+            -- เน€เธยเน€เธเธ”เน€เธโ€เน€เธโฌเน€เธเธเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ”เน€เธโ€ Toggle
             pcall(function()
                 Bridge:FireServer("General", "Star", "Auto", false)
             end)
@@ -1943,72 +2221,9 @@ Tab_OpenStar:CreateToggle({
 
 
 -- ==========================================
--- 🗺️ TELEPORT TAB
+-- เนยโ€”เธเนเธย TELEPORT TAB
 -- ==========================================
 
-local Section_Ascend = Tab_OpenStar:CreateSection("Ascend Fighter")
-Tab_OpenStar:CreateToggle({
-    Name = "Enable Auto Ascend (Equipped Only)",
-    CurrentValue = false,
-    Flag = "Toggle_AutoAscend",
-    Callback = function(Value)
-        _G.AutoAscend = Value
-        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
-        task.spawn(function()
-            while _G.AutoAscend do
-                task.wait(3)
-                pcall(function()
-                    local ps = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerScripts")
-                    if ps then
-                        local Main = require(ps.Scripts.Client.Main)
-                        if Main.Data and Main.Data.Fighters_Equipped then
-                            for uuid, _ in pairs(Main.Data.Fighters_Equipped) do
-                                Bridge:FireServer("Fighters", "Inventory", "Ascend", uuid)
-                            end
-                        end
-                    end
-                end)
-            end
-        end)
-    end,
-})
-
-Tab_OpenStar:CreateToggle({
-    Name = "Enable Auto Ascend",
-    CurrentValue = false,
-    Flag = "Toggle_AutoAscend",
-    Callback = function(Value)
-        _G.AutoAscend = Value
-        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
-        task.spawn(function()
-            while _G.AutoAscend do
-                task.wait(5)
-                pcall(function()
-                    local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                    if ps then
-                        local Main = require(ps.Scripts.Client.Main)
-                        local fightersData = Main.Data.Fighters or {}
-                        local sharedFighters = Main.Shared.Fighters or {}
-                        local ascendRarities = {}
-                        if _G.SelectedAutoAscend then
-                            for k, v in pairs(_G.SelectedAutoAscend) do
-                                if type(k) == "number" then ascendRarities[v] = true
-                                elseif type(k) == "string" and v == true then ascendRarities[k] = true end
-                            end
-                        end
-                        for uuid, fData in pairs(fightersData) do
-                            local sData = sharedFighters[fData.Name]
-                            if sData and ascendRarities[sData.Rarity] then
-                                Bridge:FireServer("Fighters", "Inventory", "Ascend", uuid)
-                                task.wait(0.2)
-                            end
-                        end
-                    end
-                end)
-            end
-        end)
-    end,
-})
 local Section_Islands = Tab_Teleport:CreateSection("Islands")
 
 local Islands = {
@@ -2017,7 +2232,8 @@ local Islands = {
     {"Blacksmiths Village", "BlacksmithsVillage"},
     {"Planet Of Warriors", "PlanetOfWarriors"},
     {"Leveling City", "LevelingCity"},
-    {"Tower City", "TowerCity"}
+    {"Tower City", "TowerCity"},
+    {"Online Island", "OnlineIsland"}
 }
 
 for i, island in ipairs(Islands) do
@@ -2034,7 +2250,7 @@ end
 
 -- ==========================================
 -- ==========================================
--- ⚙️ BOOST TAB
+-- เนยยเนเธย BOOST TAB
 -- ==========================================
 local Section_Boost = Tab_Boost:CreateSection("Boost Settings")
 
@@ -2047,7 +2263,7 @@ local BoostOptions = {
     "Star Speed"
 }
 
--- จับคู่ชื่อที่แสดงใน UI กับ ID ในเกม
+-- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธยเน€เธย UI เน€เธยเน€เธเธ‘เน€เธย ID เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธ
 local BoostIDs = {
     ["Coins I"] = "CoinsI", ["Coins II"] = "CoinsII", ["Coins III"] = "CoinsIII",
     ["Damage I"] = "DamageI", ["Damage II"] = "DamageII", ["Damage III"] = "DamageIII",
@@ -2092,7 +2308,7 @@ Tab_Boost:CreateToggle({
                                 if boostName then
                                     local boostId = BoostIDs[boostName]
                                     if boostId then
-                                        -- เช็คว่าบัฟทำงานอยู่หรือไม่จาก UI ของเกม (แม่นยำ 100%)
+                                        -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย UI เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ (เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ“ 100%)
                                         local isActive = false
                                         pcall(function()
                                             local boostsUI = LocalPlayer.PlayerGui.UI.Frames.Stats.Frame.Boosts.Frame
@@ -2102,16 +2318,16 @@ Tab_Boost:CreateToggle({
                                         end)
                                         
                                         if not isActive then
-                                            -- ถ้าบัฟยังไม่ Active ให้กดใช้เลย! (ถ้าไม่มีของในตัว เซิร์ฟเวอร์จะบล็อกเอง)
+                                            -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธย Active เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ! (เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธ เน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธย)
                                             Bridge:FireServer("General", "Inventory", "UseBoost", boostId)
-                                            task.wait(1) -- รอ 1 วินาทีให้ UI อัปเดตก่อนเช็คตัวถัดไป
+                                            task.wait(1) -- เน€เธเธเน€เธเธ 1 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธย UI เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ขเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโ€“เน€เธเธ‘เน€เธโ€เน€เธยเน€เธย
                                         end
                                     end
                                 end
                             end
                         end
                     end)
-                    task.wait(3) -- เช็คซ้ำทุกๆ 3 วินาที
+                    task.wait(3) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธโ€”เน€เธเธเน€เธยเน€เธย 3 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -2127,10 +2343,11 @@ Tab_Misc:CreateToggle({
         _G.AutoCodes = Value
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         
-        -- โค้ดทั้งหมดที่ใช้งานได้อัปเดตล่าสุด
+        -- เน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธโ€”เน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ขเน€เธเธ…เน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธโ€
         local CodesList = {
-            "SHUTDOWN5", "UPDATE1", "3KPLAYERS", "500KVISITS", 
-            "MINIUPDATE", "2KLIKES", "2KPLAYERS", "RELEASE"
+            "SHUTDOWN8", "SHUTDOWN7", "SORRYSHUTDOWN", "UPDATE1",
+            "3KPLAYERS", "500KVISITS", "MINIUPDATE", "2KLIKES",
+            "2KPLAYERS", "RELEASE"
         }
         
         if _G.AutoCodes then
@@ -2142,7 +2359,7 @@ Tab_Misc:CreateToggle({
                             task.wait(0.5)
                         end
                     end)
-                    task.wait(60) -- เช็คซ้ำทุกๆ 1 นาที
+                    task.wait(60) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -2160,11 +2377,11 @@ Tab_Misc:CreateToggle({
             task.spawn(function()
                 while _G.AutoInbox do
                     pcall(function()
-                        -- ยิง Claim All ตรงๆ
+                        -- เน€เธเธเน€เธเธ”เน€เธย Claim All เน€เธโ€ขเน€เธเธเน€เธยเน€เธย
                         Bridge:FireServer("General", "Inbox", "ClaimAll")
                         Bridge:FireServer("Rewards", "Inbox", "ClaimAll")
                         
-                        -- กดปุ่ม Claim ในจอถ้าเปิด UI ไว้
+                        -- เน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธยเน€เธเธ Claim เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธโ€“เน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€ UI เน€เธยเน€เธเธเน€เธย
                         if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
                             for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                                 if obj:IsA("TextButton") or obj:IsA("ImageButton") then
@@ -2195,7 +2412,7 @@ Tab_Misc:CreateToggle({
 })
 
 -- ==========================================
--- ⚙️ PLAYER TAB
+-- เนยยเนเธย PLAYER TAB
 -- ==========================================
 local Section_Movement = Tab_Player:CreateSection("Movement")
 
@@ -2229,7 +2446,7 @@ Tab_Player:CreateSlider({
 
 
 -- ==========================================
--- ⚙️ TOWER RAID TAB
+-- เนยยเนเธย TOWER RAID TAB
 -- ==========================================
 local Section_TowerRaid = Tab_Raid:CreateSection("Tower Raid Settings")
 
@@ -2266,7 +2483,7 @@ Tab_Raid:CreateToggle({
             while _G.AutoTowerRaid do
                 task.wait(1)
                 
-                -- Priority System: ถ้า Trial เปิดและถึงเวลาแล้ว ให้หยุด Raid
+                -- Priority System: เน€เธโ€“เน€เธยเน€เธเธ’ Trial เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธยเน€เธเธ…เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธยเน€เธเธ…เน€เธยเน€เธเธ เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธโ€ Raid
                 if _G.AutoTrial and _G.IsTrialActive then
                     continue 
                 end
@@ -2328,7 +2545,8 @@ Tab_Raid:CreateToggle({
                             for _, obj in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
                                 if obj:IsA("TextButton") and obj.Text ~= "" then
                                     local lowerText = string.lower(obj.Text)
-                                    if string.find(lowerText, "leave") or string.find(lowerText, "claim") or string.find(lowerText, "exit") or string.find(lowerText, "continue") then
+                                    local cleanText = string.gsub(lowerText, "^%s*(.-)%s*$", "%1")
+                                    if cleanText == "leave" or cleanText == "claim" or cleanText == "exit" or cleanText == "continue" or cleanText == "claim rewards" then
                                         if getconnections then
                                             for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
                                                 conn:Fire()
@@ -2339,14 +2557,15 @@ Tab_Raid:CreateToggle({
                             end
                         end
                         
-                        -- สัมผัสประตู Exit และกด ProximityPrompt ป้องกันบัคไม่ออกจากห้อง
+                        -- เน€เธเธเน€เธเธ‘เน€เธเธเน€เธยเน€เธเธ‘เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ Exit เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธโ€ ProximityPrompt เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย
                         local hrp = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then
                             pcall(function()
                                 local raidMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid")
                                 if raidMap then
                                     for _, v in ipairs(raidMap:GetDescendants()) do
-                                        if v:IsA("ProximityPrompt") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave") then
+                                        local vName = string.lower(v.Name)
+                                        if v:IsA("ProximityPrompt") or ((string.match(vName, "exit") or string.match(vName, "leave")) and not string.match(vName, "trade")) then
                                             local target = v:IsA("ProximityPrompt") and v.Parent or v
                                             if target and (target:IsA("BasePart") or target:IsA("Model")) then
                                                 hrp.CFrame = target:IsA("Model") and target:GetPivot() or target.CFrame
@@ -2409,7 +2628,7 @@ Tab_Raid:CreateToggle({
                 end
                 
                 if targetEnemy and targetHRP then
-                    -- มีมอนสเตอร์ให้ตี แปลว่าอยู่ในด่านแล้ว
+                    -- เน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ• เน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ
                     local tpDist = 2
                     hrp.CFrame = targetHRP.CFrame * CFrame.new(0, 0, tpDist)
                     hrp.Velocity = Vector3.new(0, 0, 0)
@@ -2418,7 +2637,7 @@ Tab_Raid:CreateToggle({
                     Bridge:FireServer("Fighters", "Click", "Damage")
                     Bridge:FireServer("Fighters", "Move", "Attack", targetEnemy:GetAttribute("Location") or targetHRP.Position, targetEnemy)
                     
-                    -- สั่งตัวละครโจมตี (Attack)
+                    -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ• (Attack)
                     pcall(function()
                         local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
                         if tool then
@@ -2433,7 +2652,7 @@ Tab_Raid:CreateToggle({
                         -- vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
                     end)
                 else
-                    -- ไม่มีมอนสเตอร์ ให้รอ หรือปล่อยให้ Auto Create/Join ทำงาน
+                    -- เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธย Auto Create/Join เน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธย
                     task.wait(1)
                 end
             end
@@ -2466,6 +2685,12 @@ Tab_Raid:CreateToggle({
                     end
                     
                     pcall(function()
+                        local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                        if mode ~= "TowerCity" and mode ~= "Lobby" then
+                            SafeUITeleport("TowerCity")
+                            task.wait(3)
+                        end
+                        
                         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
                         Bridge:FireServer("Gamemodes", "TowerRaid", "Create")
                     end)
@@ -2509,6 +2734,12 @@ Tab_Raid:CreateToggle({
                     end
                     
                     pcall(function()
+                        local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                        if mode ~= "TowerCity" and mode ~= "Lobby" then
+                            SafeUITeleport("TowerCity")
+                            task.wait(3)
+                        end
+                        
                         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
                         Bridge:FireServer("Gamemodes", "TowerRaid", "Join")
                     end)
@@ -2527,7 +2758,7 @@ Tab_Raid:CreateToggle({
     end,
 })
 
-local Section_Misc = Tab_Misc:CreateSection("Misc")
+local Section_Misc = Tab_Misc:CreateSection("Rewards & Misc")
 
 Tab_Misc:CreateToggle({
     Name = "Anti-AFK",
@@ -2605,12 +2836,12 @@ Tab_Trial:CreateToggle({
                                 
                                 if itemName and TrialMerchantMapping[itemName] then
                                     Bridge:FireServer("General", "TrialMerchant", "Buy", TrialMerchantMapping[itemName])
-                                    task.wait(0.05) -- ปรับให้ซื้อไวขึ้นมากๆ (20 ชิ้นต่อวินาที)
+                                    task.wait(0.05) -- เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธยเน€เธย (20 เน€เธยเน€เธเธ”เน€เธยเน€เธยเน€เธโ€ขเน€เธยเน€เธเธเน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•)
                                 end
                             end
                         end
                     end)
-                    task.wait(1) -- เช็คซื้อทุกๆ 1 วินาที (เร็วขึ้น 5 เท่า)
+                    task.wait(1) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• (เน€เธโฌเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธย 5 เน€เธโฌเน€เธโ€”เน€เธยเน€เธเธ’)
                 end
             end)
         end
@@ -2630,7 +2861,7 @@ Tab_Misc:CreateToggle({
             while _G.AutoBattlepass do
                 task.wait(10)
                 pcall(function()
-                    -- ยิง Claim All 
+                    -- เน€เธเธเน€เธเธ”เน€เธย Claim All 
                     Bridge:FireServer("General", "Battlepass", "ClaimAll")
                     Bridge:FireServer("Rewards", "Battlepass", "ClaimAll")
                     
@@ -2684,3 +2915,274 @@ Tab_Misc:CreateToggle({
     end,
 })
 
+Tab_Misc:CreateToggle({
+    Name = "Auto Claim Free Gifts & Playtime",
+    CurrentValue = false,
+    Flag = "Toggle_AutoFreeGifts",
+    Callback = function(Value)
+        _G.AutoFreeGifts = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        if _G.AutoFreeGifts then
+            task.spawn(function()
+                while _G.AutoFreeGifts do
+                    pcall(function()
+                        Bridge:FireServer("General", "PlaytimeRewards", "ClaimAll")
+                        for i = 1, 15 do
+                            Bridge:FireServer("General", "PlaytimeRewards", "Claim", i)
+                            Bridge:FireServer("Rewards", "PlaytimeRewards", "Claim", i)
+                            Bridge:FireServer("General", "FreeGifts", "Claim", i)
+                            Bridge:FireServer("Rewards", "FreeGifts", "Claim", i)
+                        end
+                    end)
+                    task.wait(15)
+                end
+            end)
+        end
+    end,
+})
+
+Tab_Misc:CreateToggle({
+    Name = "Auto Claim Achievements & Quests",
+    CurrentValue = false,
+    Flag = "Toggle_AutoAchievements",
+    Callback = function(Value)
+        _G.AutoAchievements = Value
+        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+        if _G.AutoAchievements then
+            task.spawn(function()
+                while _G.AutoAchievements do
+                    pcall(function()
+                        Bridge:FireServer("General", "Achievements", "ClaimAll")
+                        for i = 1, 50 do
+                            Bridge:FireServer("General", "Achievements", "Claim", i)
+                            Bridge:FireServer("General", "Achievements", "Claim", tostring(i))
+                            Bridge:FireServer("General", "Quests", "Claim", i)
+                        end
+                    end)
+                    task.wait(20)
+                end
+            end)
+        end
+    end,
+})
+
+-- ==========================================
+-- เนยโ€ย INFO TAB
+-- ==========================================
+local Tab_Info = Window:CreateTab("Info")
+local Section_Info = Tab_Info:CreateSection("Player Info")
+
+local function createGradient(c1, c2)
+    return ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(1, c2)
+    })
+end
+
+local Lbl_Username = Tab_Info:CreateLabel({Name = "👤 Username: " .. game:GetService("Players").LocalPlayer.Name, Gradient = createGradient(Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 100, 255))})
+local Lbl_Level = Tab_Info:CreateLabel({Name = "⭐ Level: ???", Gradient = createGradient(Color3.fromRGB(255, 215, 0), Color3.fromRGB(255, 140, 0))})
+local Lbl_Coins = Tab_Info:CreateLabel({Name = "💰 Coins: ???", Gradient = createGradient(Color3.fromRGB(255, 255, 0), Color3.fromRGB(200, 200, 0))})
+local Lbl_Gems = Tab_Info:CreateLabel({Name = "💎 Gems: ???", Gradient = createGradient(Color3.fromRGB(0, 255, 255), Color3.fromRGB(255, 0, 255))})
+local Lbl_TraitRerolls = Tab_Info:CreateLabel({Name = "🎲 Trait Rerolls: ???", Gradient = createGradient(Color3.fromRGB(50, 255, 50), Color3.fromRGB(0, 150, 0))})
+local Lbl_StarOpen = Tab_Info:CreateLabel({Name = "🌟 Stars Opened: ???", Gradient = createGradient(Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 20, 147))})
+local Lbl_Playtime = Tab_Info:CreateLabel({Name = "⏱ Playtime: ???", Gradient = createGradient(Color3.fromRGB(135, 206, 235), Color3.fromRGB(70, 130, 180))})
+local Lbl_Strength = Tab_Info:CreateLabel({Name = "⚔ Strength: ???", Gradient = createGradient(Color3.fromRGB(255, 69, 0), Color3.fromRGB(139, 0, 0))})
+
+-- Auto Refresh Info Loop
+task.spawn(function()
+    while task.wait(0.5) do -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€”เน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธเน€เธยเน€เธย 0.5 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• (Realtime)
+        pcall(function()
+            local lp = game:GetService("Players").LocalPlayer
+            local ls = lp:FindFirstChild("leaderstats")
+            
+            local function getStat(names)
+                -- 1. เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย leaderstats
+                if ls then
+                    for _, child in ipairs(ls:GetChildren()) do
+                        local cName = string.lower(child.Name)
+                        for _, n in ipairs(names) do
+                            if string.find(cName, n) then return child.Value end
+                        end
+                    end
+                end
+                -- 2. เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย Attributes
+                for attr, val in pairs(lp:GetAttributes()) do
+                    local aName = string.lower(attr)
+                    for _, n in ipairs(names) do
+                        if string.find(aName, n) then return val end
+                    end
+                end
+                return 0
+            end
+
+            local level = getStat({"level", "lvl"})
+            local coins = getStat({"coin", "yen", "money", "cash"})
+            local gems = getStat({"gem", "diamond", "crystal"})
+            local trait = getStat({"trait", "reroll"})
+            local stars = getStat({"star", "open"})
+            local playtime = getStat({"time", "play"})
+            local strength = getStat({"strength", "power"})
+
+            -- Fallback เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย Main.Data เน€เธโ€“เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธย 0
+            pcall(function()
+                local ps = lp:FindFirstChild("PlayerScripts")
+                if ps then
+                    local mainMod = ps:FindFirstChild("Client") and ps.Client:FindFirstChild("Main")
+                    if mainMod then
+                        local Main = require(mainMod)
+                        if Main and Main.Data then
+                            if level == 0 then level = Main.Data.Level or 0 end
+                            if coins == 0 then coins = Main.Data.Coins or Main.Data.Yen or 0 end
+                            if gems == 0 then gems = Main.Data.Gems or Main.Data.Diamonds or 0 end
+                            if trait == 0 then trait = Main.Data.TraitRerolls or Main.Data.Rerolls or 0 end
+                            if stars == 0 then stars = Main.Data.StarsOpened or Main.Data.StarOpen or Main.Data.TotalStars or Main.Data.Stars or 0 end
+                            if playtime == 0 then playtime = Main.Data.Playtime or Main.Data.TimePlayed or 0 end
+                            if strength == 0 then strength = Main.Data.Strength or Main.Data.Power or 0 end
+                        end
+                    end
+                end
+            end)
+
+            -- Fallback เน€เธเธเน€เธเธ’ Strength เน€เธยเน€เธเธ’เน€เธย Damage Package
+            if strength == 0 then
+                pcall(function()
+                    local Damage = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Damage"))
+                    local pStrength = Damage:GetPlayerStrength(lp)
+                    if pStrength then strength = pStrength end
+                end)
+            end
+
+            local function formatNum(n)
+                if type(n) ~= "number" then return tostring(n) end
+                if n >= 1e9 then return string.format("%.2fB", n/1e9)
+                elseif n >= 1e6 then return string.format("%.2fM", n/1e6)
+                elseif n >= 1e3 then return string.format("%.2fK", n/1e3)
+                else return tostring(math.floor(n)) end
+            end
+            
+            local function formatTime(s)
+                if type(s) ~= "number" then return tostring(s) end
+                local h = math.floor(s / 3600)
+                local m = math.floor((s % 3600) / 60)
+                local sec = math.floor(s % 60)
+                if h > 0 then return string.format("%dh %dm %ds", h, m, sec)
+                else return string.format("%dm %ds", m, sec) end
+            end
+            
+            Lbl_Username:Set("👤 Username: " .. lp.Name)
+            Lbl_Level:Set("⭐ Level: " .. formatNum(level))
+            Lbl_Coins:Set("💰 Coins: " .. formatNum(coins))
+            Lbl_Gems:Set("💎 Gems: " .. formatNum(gems))
+            Lbl_TraitRerolls:Set("🎲 Trait Rerolls: " .. formatNum(trait))
+            Lbl_StarOpen:Set("🌟 Stars Opened: " .. formatNum(stars))
+            Lbl_Playtime:Set("⏱ Playtime: " .. formatTime(playtime))
+            Lbl_Strength:Set("⚔ Strength: " .. formatNum(strength))
+        end)
+    end
+end)
+
+-- ==========================================
+-- เนยยเนเธย SETTINGS TAB
+-- ==========================================
+local Tab_Settings = Window:CreateTab("Settings")
+local Section_Settings = Tab_Settings:CreateSection("UI Settings")
+
+Tab_Settings:CreateDropdown({
+    Name = "Theme Color",
+    Options = {"Sci-Fi Cyan", "Neon Green", "Cyber Purple", "Ruby Red", "Solar Yellow", "Pure White"},
+    CurrentOption = {"Sci-Fi Cyan"},
+    MultipleOptions = false,
+    Flag = "Dropdown_ThemeColor",
+    Callback = function(Value)
+        local color = Color3.fromRGB(0, 255, 255)
+        local opt = type(Value) == "table" and Value[1] or Value
+        if opt == "Sci-Fi Cyan" then color = Color3.fromRGB(0, 255, 255)
+        elseif opt == "Neon Green" then color = Color3.fromRGB(57, 255, 20)
+        elseif opt == "Cyber Purple" then color = Color3.fromRGB(191, 0, 255)
+        elseif opt == "Ruby Red" then color = Color3.fromRGB(255, 36, 0)
+        elseif opt == "Solar Yellow" then color = Color3.fromRGB(255, 204, 0)
+        elseif opt == "Pure White" then color = Color3.fromRGB(255, 255, 255)
+        end
+        
+        UI_Config.AccentColor = color
+        
+        pcall(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("SKT_Hub_Custom") or (LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SKT_Hub_Custom"))
+            if sg then
+                local mainFrame = sg:FindFirstChild("MainFrame")
+                if mainFrame then
+                    local stroke = mainFrame:FindFirstChildOfClass("UIStroke")
+                    if stroke then stroke.Color = color end
+                end
+                
+                for _, obj in ipairs(sg:GetDescendants()) do
+                    if obj.Name == "HeaderText" or obj.Name == "ResizeBtn" or obj.Name == "LogoText" then
+                        obj.TextColor3 = color
+                    elseif obj:IsA("TextLabel") and string.sub(obj.Text, 1, 3) == ">> " then
+                        obj.TextColor3 = color
+                    end
+                end
+                
+                local miniBtn = sg:FindFirstChild("MiniBtn")
+                if miniBtn then
+                    local mstroke = miniBtn:FindFirstChildOfClass("UIStroke")
+                    if mstroke then mstroke.Color = color end
+                end
+            end
+            
+            if Tabs then
+                for _, t in ipairs(Tabs) do
+                    if t.Indicator then t.Indicator.BackgroundColor3 = color end
+                    if t.Content and t.Content.Visible and t.Btn then
+                        t.Btn.TextColor3 = color
+                    end
+                end
+            end
+        end)
+    end
+})
+
+Tab_Settings:CreateSlider({
+    Name = "UI Transparency",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 15,
+    Flag = "Slider_UITransparency",
+    Callback = function(Value)
+        pcall(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("SKT_Hub_Custom") or (LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SKT_Hub_Custom"))
+            if sg then
+                local mainFrame = sg:FindFirstChild("MainFrame")
+                if mainFrame then
+                    mainFrame.BackgroundTransparency = Value / 100
+                    local sidebar = mainFrame:FindFirstChild("Sidebar")
+                    if sidebar then
+                        sidebar.BackgroundTransparency = math.min(1, (Value / 100) + 0.05)
+                    end
+                end
+            end
+        end)
+    end,
+})
+
+Tab_Settings:CreateSlider({
+    Name = "UI Border Thickness",
+    Range = {0, 5},
+    Increment = 1,
+    Suffix = " px",
+    CurrentValue = 1,
+    Flag = "Slider_UIBorder",
+    Callback = function(Value)
+        pcall(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("SKT_Hub_Custom") or (LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SKT_Hub_Custom"))
+            if sg then
+                local mainFrame = sg:FindFirstChild("MainFrame")
+                if mainFrame then
+                    local stroke = mainFrame:FindFirstChildOfClass("UIStroke")
+                    if stroke then stroke.Thickness = Value end
+                end
+            end
+        end)
+    end,
+})
