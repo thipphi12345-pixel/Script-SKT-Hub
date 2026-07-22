@@ -153,6 +153,11 @@ function SKT_UI:CreateWindow(options)
     MainFrame.Parent = SG
     CreateCorner(MainFrame, 8)
     
+    local MainUIScale = Instance.new("UIScale")
+    MainUIScale.Name = "MainUIScale"
+    MainUIScale.Scale = 1
+    MainUIScale.Parent = MainFrame
+    
     local MainGradient = Instance.new("UIGradient")
     MainGradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
@@ -1002,7 +1007,6 @@ local Tab_Player = Window:CreateTab("Player")
 local Tab_Boost = Window:CreateTab("Boost")
 
 -- ==========================================
--- เนยโ€เนเธย AUTO FARM TAB
 -- ==========================================
 
 
@@ -1011,10 +1015,10 @@ local Section_Farm = Tab_Autofarm:CreateSection("Farm Settings")
 local function SafeUITeleport(targetModuleOrName)
     local tpFound = false
     pcall(function()
-        local LocalPlayer = game:GetService("Players").LocalPlayer
-        if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+        local LocalPlayer = game:GetService('Players').LocalPlayer
+        if LocalPlayer and LocalPlayer:FindFirstChild('PlayerGui') then
             for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                if obj:IsA("TextLabel") and obj.Text ~= "" then
+                if obj:IsA('TextLabel') and obj.Text ~= '' then
                     local textLower = string.lower(obj.Text)
                     local searchName = string.lower(targetModuleOrName)
                     if searchName == "lobby" then searchName = "starter town" end
@@ -1194,19 +1198,16 @@ local MapDropdown = Tab_Autofarm:CreateDropdown({
     Callback = function(Option)
         _G.SelectedQuestKey = type(Option) == "table" and Option[1] or Option
         
-        -- เน€เธโ€”เน€เธเธ”เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย
+        
         task.spawn(function()
             pcall(function()
                 local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
                 Bridge:FireServer("General", "Quest", "Abandon")
                 
-                -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•! (เน€เธโ€เน€เธเธ–เน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธ Module เน€เธยเน€เธเธ’เน€เธย QuestData)
                 local targetKey = _G.SelectedQuestKey
                 local qData = QuestData[targetKey]
                 if qData and qData.Module then
                     SafeUITeleport(qData.Module)
-                    task.wait(1.5) -- เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ…เน€เธโ€เน€เธเธเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธเน€เธย
-                    -- เน€เธเธเน€เธเธ”เน€เธย Remote เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•
                     Bridge:FireServer("General", "Quest", "Accept", qData.Module)
                 end
             end)
@@ -1221,12 +1222,10 @@ local MapDropdown = Tab_Autofarm:CreateDropdown({
             end
         end
         
-        -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธโ€ขเน€เธเธเน€เธย Load Config
         local oldMonster = _G.SelectedMonster
         
         MonsterDropdown:Refresh(opts, {opts[1]})
         
-        -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธเน€เธเธเน€เธเธ•เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธย เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธ
         local foundOld = false
         for _, o in ipairs(opts) do
             if o == oldMonster then
@@ -1252,62 +1251,61 @@ local AutoQuestToggle = Tab_Autofarm:CreateToggle({
     Callback = function(Value)
         _G.AutoQuest = Value
         
-        while _G.AutoQuest do
-            task.wait(1)
+        task.spawn(function()
+            while _G.AutoQuest do
+                task.wait(1)
             
-            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ•เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธย Trial/Raid
-            local isRaidBusy = _G.IsRaidActive
-            if not isRaidBusy then
-                if _G.AutoCreateRaid or _G.AutoJoinRaid then
-                    if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
-                        isRaidBusy = true
+                local isRaidBusy = _G.IsRaidActive
+                if not isRaidBusy then
+                    if _G.AutoCreateRaid or _G.AutoJoinRaid then
+                        if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
+                            isRaidBusy = true
+                        end
                     end
                 end
-            end
             
-            if (_G.AutoTrial and _G.IsTrialActive) or isRaidBusy then continue end
+                if (_G.AutoTrial and _G.IsTrialActive) or isRaidBusy then continue end
             
-            local activeMapKey = _G.SelectedQuestKey
-            local qData = QuestData[activeMapKey]
-            if not qData then continue end
+                local activeMapKey = _G.SelectedQuestKey
+                local qData = QuestData[activeMapKey]
+                if not qData then continue end
             
-            local hasQuest = false
-            pcall(function()
-                local LocalPlayer = game:GetService("Players").LocalPlayer
-                if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
-                    for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                        if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
-                            local isVisible = true
-                            local parent = obj
-                            while parent and parent:IsA("GuiObject") do
-                                if not parent.Visible then isVisible = false break end
-                                parent = parent.Parent
-                            end
+                local hasQuest = false
+                pcall(function()
+                    local LocalPlayer = game:GetService("Players").LocalPlayer
+                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                            if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
+                                local isVisible = true
+                                local parent = obj
+                                while parent and parent:IsA("GuiObject") do
+                                    if not parent.Visible then isVisible = false break end
+                                    parent = parent.Parent
+                                end
                             
-                            if isVisible then
-                                local cleanText = string.gsub(obj.Text, "<[^>]+>", "")
-                                local m, curr, max = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
-                                if m and curr and max then
-                                    if tonumber(curr) < tonumber(max) then
-                                        hasQuest = true
-                                        break
+                                if isVisible then
+                                    local cleanText = string.gsub(obj.Text, "<[^>]+>", "")
+                                    local m, curr, max = string.match(cleanText, "Defeat%s+%d+%s+(.-)%s*[%([](%d+)/(%d+)[%)%]]")
+                                    if m and curr and max then
+                                        if tonumber(curr) < tonumber(max) then
+                                            hasQuest = true
+                                            break
+                                        end
                                     end
                                 end
                             end
                         end
                     end
-                end
-            end)
-            
-            -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธโฌเน€เธยเน€เธเธเน€เธเธ เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย
-            if not hasQuest then
-                pcall(function()
-                    local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
-                    Bridge:FireServer("General", "Quest", "Accept", qData.Module)
                 end)
-                task.wait(2) -- เน€เธเธเน€เธเธเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ข Quest GUI
+            
+                if not hasQuest then
+                    pcall(function()
+                        local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
+                        Bridge:FireServer("General", "Quest", "Accept", qData.Module)
+                    end)
+                end
             end
-        end
+        end)
     end,
 })
 
@@ -1318,152 +1316,142 @@ local AutoTeleportToggle = Tab_Autofarm:CreateToggle({
     Callback = function(Value)
         _G.AutoTeleport = Value
         
-        while _G.AutoTeleport do
-            task.wait(0.1)
+        task.spawn(function()
+            while _G.AutoTeleport do
+                task.wait(0.1)
             
-            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ•เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ—เน€เธยเน€เธย
-            if _G.AutoTrial and _G.IsTrialActive then continue end
+                if _G.AutoTrial and _G.IsTrialActive then continue end
             
-            local isRaidBusy = _G.IsRaidActive
-            if not isRaidBusy then
-                if _G.AutoCreateRaid or _G.AutoJoinRaid then
-                    if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
-                        isRaidBusy = true
+                local isRaidBusy = _G.IsRaidActive
+                if not isRaidBusy then
+                    if _G.AutoCreateRaid or _G.AutoJoinRaid then
+                        if not _G.RaidCooldown or os.time() >= _G.RaidCooldown then
+                            isRaidBusy = true
+                        end
                     end
                 end
-            end
             
-            if (_G.AutoTowerRaid and _G.IsRaidActive) or isRaidBusy then continue end
+                if (_G.AutoTowerRaid and _G.IsRaidActive) or isRaidBusy then continue end
             
-            local targetMonsterName = _G.SelectedMonster
+                local targetMonsterName = _G.SelectedMonster
             
-            -- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธเธ•เน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ“เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย Dropdown เน€เธโฌเน€เธโ€”เน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธย
-            if targetMonsterName and targetMonsterName ~= "Best ( Quest )" and targetMonsterName ~= "Auto Progress" then
-                local targetMonster = nil
-                local shortestDistance = math.huge
+                if targetMonsterName and targetMonsterName ~= "Best ( Quest )" and targetMonsterName ~= "Auto Progress" then
+                    local targetMonster = nil
+                    local shortestDistance = math.huge
                 
-                -- เน€เธเธเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธโฌเน€เธโ€เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ‘เน€เธย
-                local searchFolder = workspace
-                pcall(function()
-                    local activeMapKey = _G.SelectedQuestKey or ""
-                    local cleanName = string.gsub(activeMapKey, " ", "")
-                    local mapFolder = workspace:FindFirstChild(cleanName) or (workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(cleanName))
-                    if mapFolder then
-                        searchFolder = mapFolder:FindFirstChild("Monsters") or mapFolder:FindFirstChild("Enemies") or mapFolder
-                    end
-                end)
+                    local searchFolder = workspace
+                    pcall(function()
+                        local activeMapKey = _G.SelectedQuestKey or ""
+                        local cleanName = string.gsub(activeMapKey, " ", "")
+                        local mapFolder = workspace:FindFirstChild(cleanName) or (workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(cleanName))
+                        if mapFolder then
+                            searchFolder = mapFolder:FindFirstChild("Monsters") or mapFolder:FindFirstChild("Enemies") or mapFolder
+                        end
+                    end)
                 
-                -- เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย
-                for _, obj in ipairs(searchFolder:GetDescendants()) do
-                    if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") and obj:FindFirstChild("Humanoid") then
-                        local cleanObjName = string.lower(string.gsub(obj.Name, "[^%w]", ""))
-                        local cleanTargetName = string.lower(string.gsub(targetMonsterName, "[^%w]", ""))
+                    for _, obj in ipairs(searchFolder:GetDescendants()) do
+                        if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") and obj:FindFirstChild("Humanoid") then
+                            local cleanObjName = string.lower(string.gsub(obj.Name, "[^%w]", ""))
+                            local cleanTargetName = string.lower(string.gsub(targetMonsterName, "[^%w]", ""))
                         
-                        local isNameMatch = (cleanObjName == cleanTargetName) or (string.find(cleanObjName, cleanTargetName) ~= nil)
+                            local isNameMatch = (cleanObjName == cleanTargetName) or (string.find(cleanObjName, cleanTargetName) ~= nil)
                         
-                        if isNameMatch then
-                            local isAlive = true
+                            if isNameMatch then
+                                local isAlive = true
                             
-                            if obj:GetAttribute("Health") ~= nil then
-                                if obj:GetAttribute("Health") <= 0 then isAlive = false end
-                            else
-                                if obj.Humanoid.Health <= 0 then isAlive = false end
-                            end
-                            if obj:GetAttribute("Dead") == true or obj:GetAttribute("Died") == true or obj:GetAttribute("IsDead") == true then isAlive = false end
-                            if obj.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
-                            
-                            if isAlive then
-                                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.HumanoidRootPart.Position).Magnitude
-                                    if dist < shortestDistance then
-                                        shortestDistance = dist
-                                        targetMonster = obj
-                                    end
+                                if obj:GetAttribute("Health") ~= nil then
+                                    if obj:GetAttribute("Health") <= 0 then isAlive = false end
                                 else
-                                    targetMonster = obj
-                                    break
+                                    if obj.Humanoid.Health <= 0 then isAlive = false end
+                                end
+                                if obj:GetAttribute("Dead") == true or obj:GetAttribute("Died") == true or obj:GetAttribute("IsDead") == true then isAlive = false end
+                                if obj.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
+                            
+                                if isAlive then
+                                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                        local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.HumanoidRootPart.Position).Magnitude
+                                        if dist < shortestDistance then
+                                            shortestDistance = dist
+                                            targetMonster = obj
+                                        end
+                                    else
+                                        targetMonster = obj
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                
+                    if targetMonster and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = LocalPlayer.Character.HumanoidRootPart
+                        local dist = (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude
+                    
+                        if dist > 15000 then
+                            local activeMapKey = _G.SelectedQuestKey
+                            local qData = QuestData[activeMapKey]
+                            if qData and qData.Module then
+                                pcall(function()
+                                    SafeUITeleport(qData.Module)
+                                end)
+                                task.wait(1.5)
+                            end
+                        else
+                            if (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude > 15 then
+                                local mCFrame = targetMonster.HumanoidRootPart.CFrame
+                                local mPos = targetMonster.HumanoidRootPart.Position
+                            
+                                local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
+                                if flatLook.Magnitude > 0.001 then
+                                    flatLook = flatLook.Unit
+                                else
+                                    flatLook = Vector3.new(0, 0, -1)
+                                end
+                            
+                                local behindPos = mPos - (flatLook * 5)
+                            
+                                hrp.CFrame = CFrame.new(behindPos, mPos)
+                            end
+                            hrp.Velocity = Vector3.new(0, 0, 0)
+                        end
+                    elseif not targetMonster then
+                        local activeMapKey = _G.SelectedQuestKey
+                        local qData = QuestData[activeMapKey]
+                        if qData and qData.Module then
+                            local mode = ""
+                            pcall(function()
+                                mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode") or ""
+                            end)
+                            if mode ~= qData.Module then
+                                if mode == "Trade" or mode == "TowerCity" then
+                                    pcall(function()
+                                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                        if hrp then
+                                            local mapFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(mode)
+                                            if mapFolder then
+                                                for _, v in ipairs(mapFolder:GetDescendants()) do
+                                                    if v:IsA("BasePart") and (string.match(string.lower(v.Name), "portal") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave")) then
+                                                        hrp.CFrame = v.CFrame
+                                                        task.wait(0.5)
+                                                    end
+                                                end
+                                            end
+                                        end
+                                        SafeUITeleport("StarterTown")
+                                    end)
+                                    task.wait(3)
+                                else
+                                    pcall(function()
+                                        SafeUITeleport(qData.Module)
+                                    end)
+                                    task.wait(2.5)
                                 end
                             end
                         end
                     end
                 end
-                
-                -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธย
-                if targetMonster and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = LocalPlayer.Character.HumanoidRootPart
-                    local dist = (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude
-                    
-                    if dist > 15000 then
-                        -- เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธโฌเน€เธยเน€เธเธ”เน€เธย เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธโฌเน€เธยเน€เธเธ’เน€เธเธ
-                        local activeMapKey = _G.SelectedQuestKey
-                        local qData = QuestData[activeMapKey]
-                        if qData and qData.Module then
-                            pcall(function()
-                                SafeUITeleport(qData.Module)
-                            end)
-                            task.wait(1.5)
-                        end
-                    else
-                        -- เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย
-                        if (hrp.Position - targetMonster.HumanoidRootPart.Position).Magnitude > 15 then
-                            local mCFrame = targetMonster.HumanoidRootPart.CFrame
-                            local mPos = targetMonster.HumanoidRootPart.Position
-                            
-                            -- เน€เธยเน€เธเธ“เน€เธยเน€เธเธเน€เธโ€เน€เธโฌเน€เธเธเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธย (เน€เธโ€ขเน€เธเธ‘เน€เธโ€เน€เธยเน€เธยเน€เธย Y เน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธเธ”เน€เธยเน€เธโ€ขเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย)
-                            local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
-                            if flatLook.Magnitude > 0.001 then
-                                flatLook = flatLook.Unit
-                            else
-                                flatLook = Vector3.new(0, 0, -1)
-                            end
-                            
-                            -- เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย 5 Studs เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธย
-                            local behindPos = mPos - (flatLook * 5)
-                            
-                            -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ข CFrame (เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธโ€ขเน€เธยเน€เธโ€“เน€เธเธเน€เธเธเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธย 5 Studs)
-                            hrp.CFrame = CFrame.new(behindPos, mPos)
-                        end
-                        hrp.Velocity = Vector3.new(0, 0, 0)
-                    end
-                elseif not targetMonster then
-                    -- เน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธเธเน€เธเธ’เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธย (เน€เธโฌเน€เธยเน€เธยเน€เธย เน€เธโฌเน€เธยเน€เธเธ”เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย Trial/Raid)
-                    local activeMapKey = _G.SelectedQuestKey
-                    local qData = QuestData[activeMapKey]
-                    if qData and qData.Module then
-                        local mode = ""
-                        pcall(function()
-                            mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode") or ""
-                        end)
-                        if mode ~= qData.Module then
-                            if mode == "Trade" or mode == "TowerCity" then
-                                -- เน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธเธ…เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Lobby เน€เธยเน€เธยเน€เธเธเน€เธย
-                                pcall(function()
-                                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                                    if hrp then
-                                        local mapFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild(mode)
-                                        if mapFolder then
-                                            for _, v in ipairs(mapFolder:GetDescendants()) do
-                                                if v:IsA("BasePart") and (string.match(string.lower(v.Name), "portal") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave")) then
-                                                    hrp.CFrame = v.CFrame
-                                                    task.wait(0.5)
-                                                end
-                                            end
-                                        end
-                                    end
-                                    SafeUITeleport("StarterTown")
-                                end)
-                                task.wait(3)
-                            else
-                                pcall(function()
-                                    SafeUITeleport(qData.Module)
-                                end)
-                                task.wait(2.5)
-                            end
-                        end
-                    end
-                end
             end
-        end
+        end)
     end,
 })
 
@@ -1489,99 +1477,91 @@ Tab_Autofarm:CreateToggle({
         _G.AutoNextMap = Value
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         
-        while _G.AutoNextMap do
-            task.wait(1)
+        task.spawn(function()
+            while _G.AutoNextMap do
+                task.wait(1)
             
-            pcall(function()
-                -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€ AutoQuest เน€เธเธเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธยเน€เธเธเน€เธยเน€เธโ€”เน€เธเธ“เน€เธเธเน€เธเธเน€เธยเน€เธเธ
-                if not _G.AutoQuestFarm then return end
+                pcall(function()
+                    if not _G.AutoQuestFarm then return end
                 
-                local activeMapKey = _G.SelectedQuestKey
+                    local activeMapKey = _G.SelectedQuestKey
                 
-                -- เน€เธเธเน€เธเธ’ Index เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ‘เน€เธย
-                local currentIndex = 0
-                for i, mapName in ipairs(MapOrderList) do
-                    if mapName == activeMapKey then
-                        currentIndex = i
-                        break
+                    local currentIndex = 0
+                    for i, mapName in ipairs(MapOrderList) do
+                        if mapName == activeMapKey then
+                            currentIndex = i
+                            break
+                        end
                     end
-                end
                 
-                -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธโ€”เน€เธยเน€เธเธ’เน€เธเธ (เน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโ€“เน€เธเธ‘เน€เธโ€เน€เธยเน€เธย)
-                if currentIndex > 0 and currentIndex < #MapOrderList then
-                    local nextMapName = MapOrderList[currentIndex + 1]
-                    local nextMapCost = MapUnlockCost[nextMapName] or math.huge
+                    if currentIndex > 0 and currentIndex < #MapOrderList then
+                        local nextMapName = MapOrderList[currentIndex + 1]
+                        local nextMapCost = MapUnlockCost[nextMapName] or math.huge
                     
-                    -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธย (Coins) เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ…เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ“
-                    local myCoins = 0
+                        local myCoins = 0
 
-                    if LocalPlayer:FindFirstChild("leaderstats") then
-                        local c = LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("เนยโ€เธ Coins") or LocalPlayer.leaderstats:FindFirstChild("Yen")
-                        if c then
-                            myCoins = parseCoins(c.Value)
-                        else
-                            for _, stat in ipairs(LocalPlayer.leaderstats:GetChildren()) do
-                                if string.match(stat.Name, "Coins") or string.match(stat.Name, "Yen") then
-                                    myCoins = parseCoins(stat.Value)
-                                    break
+                        if LocalPlayer:FindFirstChild("leaderstats") then
+                            if c then
+                                myCoins = parseCoins(c.Value)
+                            else
+                                for _, stat in ipairs(LocalPlayer.leaderstats:GetChildren()) do
+                                    if string.match(stat.Name, "Coins") or string.match(stat.Name, "Yen") then
+                                        myCoins = parseCoins(stat.Value)
+                                        break
+                                    end
                                 end
                             end
                         end
-                    end
                     
-                    if myCoins >= nextMapCost then
-                        local moduleName = nextMapName
-                        if QuestData and QuestData[nextMapName] and QuestData[nextMapName].Module then
-                            moduleName = QuestData[nextMapName].Module
-                        end
+                        if myCoins >= nextMapCost then
+                            local moduleName = nextMapName
+                            if QuestData and QuestData[nextMapName] and QuestData[nextMapName].Module then
+                                moduleName = QuestData[nextMapName].Module
+                            end
                         
-                        -- เน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ”เน€เธย Remote เน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธโ€”เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธย
-                        local remotesToTry = {moduleName, nextMapName, string.upper(moduleName), string.lower(moduleName)}
-                        for _, name in ipairs(remotesToTry) do
-                            pcall(function() Bridge:FireServer("General", "Portal", "Buy", name) end)
-                            pcall(function() Bridge:FireServer("General", "Portal", "Unlock", name) end)
-                            pcall(function() Bridge:FireServer("Portal", "Buy", name) end)
-                        end
+                            local remotesToTry = {moduleName, nextMapName, string.upper(moduleName), string.lower(moduleName)}
+                            for _, name in ipairs(remotesToTry) do
+                                pcall(function() Bridge:FireServer("General", "Portal", "Buy", name) end)
+                                pcall(function() Bridge:FireServer("General", "Portal", "Unlock", name) end)
+                                pcall(function() Bridge:FireServer("Portal", "Buy", name) end)
+                            end
                         
-                        -- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธย Lobby เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโฌเน€เธโ€เน€เธเธ”เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Portal เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธย
-                        pcall(function() SafeUITeleport("Lobby") end)
-                        task.wait(3.5)
+                            pcall(function() SafeUITeleport("Lobby") end)
+                            task.wait(3.5)
                         
-                        -- เน€เธโ€เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ”เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ Buy / Unlock เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธ (เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธโฌเน€เธโ€เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโ€ขเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ—เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธเธเน€เธเธ’)
-                        task.spawn(function()
-                            for i = 1, 15 do
-                                pcall(function()
-                                    if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
-                                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                                            if obj:IsA("TextButton") and obj.Text ~= "" then
-                                                local txt = string.lower(obj.Text)
-                                                if string.find(txt, "buy") or string.find(txt, "unlock") or string.find(txt, "purchase") or string.find(txt, "yes") then
-                                                    if getconnections then
-                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
-                                                            conn:Fire()
+                            task.spawn(function()
+                                for i = 1, 15 do
+                                    pcall(function()
+                                        if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
+                                            for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                                                if obj:IsA("TextButton") and obj.Text ~= "" then
+                                                    local txt = string.lower(obj.Text)
+                                                    if string.find(txt, "buy") or string.find(txt, "unlock") or string.find(txt, "purchase") or string.find(txt, "yes") then
+                                                        if getconnections then
+                                                            for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do
+                                                                conn:Fire()
+                                                            end
                                                         end
                                                     end
                                                 end
                                             end
                                         end
-                                    end
-                                end)
-                                task.wait(0.5)
+                                    end)
+                                    task.wait(0.5)
+                                end
+                            end)
+                        
+                            _G.SelectedQuestKey = nextMapName
+                            if MapDropdown then
+                                MapDropdown:Set({nextMapName})
                             end
-                        end)
                         
-                        -- เน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย
-                        _G.SelectedQuestKey = nextMapName
-                        if MapDropdown then
-                            MapDropdown:Set({nextMapName})
+                            _G.IsCurrentMapFinished = false
                         end
-                        
-                        -- เน€เธเธเน€เธเธ•เน€เธโฌเน€เธยเน€เธยเน€เธโ€ขเน€เธเธเน€เธโ€“เน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธเธ…เน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย AutoQuest เน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย
-                        _G.IsCurrentMapFinished = false
                     end
-                end
-            end)
-        end
+                end)
+            end
+        end)
     end,
 })
 
@@ -1708,7 +1688,6 @@ Tab_Trial:CreateToggle({
                                     end
                                 end)
                                 
-                                -- เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ…เน€เธโ€เน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธย Lobby เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธย Quest Map เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€เน€เธเธ–เน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’
                                 local waitCount = 0
                                 while _G.AutoLeaveTrial and waitCount < 30 do
                                     task.wait(1)
@@ -1756,361 +1735,348 @@ local AutoTrialToggle = Tab_Trial:CreateToggle({
         _G.AutoTrial = Value
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         
-        -- เน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธ‘เน€เธโ€ขเน€เธเธ”เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ…เน€เธย Trial เน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโฌเน€เธโ€เน€เธเธ”เน€เธเธ
         _G.LastTrialCompletedHour = _G.LastTrialCompletedHour or -1
         _G.LastTrialCompletedHalf = _G.LastTrialCompletedHalf or -1
         _G.HasJoinedTrialLobby = false
         
-        while _G.AutoTrial do
-            task.wait(1)
+        task.spawn(function()
+            while _G.AutoTrial do
+                task.wait(1)
             
             
-            local inTrialMode = false
-            pcall(function()
-                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
-                    local Main = require(ps.Scripts.Client.Main)
-                    if Main and Main.Player then
-                        local mode = Main.Player:GetAttribute("Mode")
-                        if mode then
-                            local modeLower = string.lower(mode)
-                            if string.find(modeLower, "towerraid") or string.find(modeLower, "raid") then
+                local inTrialMode = false
+                pcall(function()
+                    local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                    if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                        local Main = require(ps.Scripts.Client.Main)
+                        if Main and Main.Player then
+                            local mode = Main.Player:GetAttribute("Mode")
+                            if mode then
+                                local modeLower = string.lower(mode)
+                                if string.find(modeLower, "towerraid") or string.find(modeLower, "raid") then
+                                    inTrialMode = false
+                                elseif string.find(modeLower, "trial") or string.find(modeLower, "gamemode") then
+                                    inTrialMode = true
+                                end
+                            end
+                            if workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid") then
                                 inTrialMode = false
-                            elseif string.find(modeLower, "trial") or string.find(modeLower, "gamemode") then
+                            elseif workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") then
                                 inTrialMode = true
                             end
-                        end
-                        -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธย
-                        if workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid") then
-                            inTrialMode = false
-                        elseif workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") then
-                            inTrialMode = true
-                        end
-                        if mode == "Lobby" or mode == "Town" or mode == "Trade" then
-                            _G.InTrialFlag = false
-                            inTrialMode = false
-                        end
-                    end
-                end
-            end)
-            
-            if _G.InTrialFlag then
-                inTrialMode = true
-                -- เน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธ (เน€เธโ€ขเน€เธเธ’เน€เธเธ/เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธย) เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ”เน€เธย Flag
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    pcall(function()
-                        local trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
-                        if not trialDoor then
-                            trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
-                        end
-                        if trialDoor then
-                            local targetPos
-                            if trialDoor:IsA("Model") then
-                                targetPos = trialDoor.PrimaryPart and trialDoor.PrimaryPart.Position or trialDoor:GetPivot().Position
-                            else
-                                targetPos = trialDoor.Position
-                            end
-                            
-                            if targetPos and (hrp.Position - targetPos).Magnitude < 100 then
-                                inTrialMode = false
+                            if mode == "Lobby" or mode == "Town" or mode == "Trade" then
                                 _G.InTrialFlag = false
-                            end
-                        end
-                    end)
-                end
-            end
-            
-            local currentTime = os.date("*t")
-            local min = currentTime.min
-            local hour = currentTime.hour
-            
-            -- เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโ€”เน€เธเธ•เน€เธยเน€เธโ€เน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธยเน€เธเธ—เน€เธเธเน€เธโ€ขเน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย (XX:00) เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธเธ–เน€เธยเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย (XX:30)
-            -- เน€เธโฌเน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธโ€เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย XX:58 เน€เธโ€“เน€เธเธ–เน€เธย XX:03 เน€เธยเน€เธเธ…เน€เธเธ XX:28 เน€เธโ€“เน€เธเธ–เน€เธย XX:33
-            local isTrialWindow = false
-            local currentHalf = 0
-            
-            if (min >= 59 or min <= 1) then
-                isTrialWindow = true
-                currentHalf = 0
-            elseif (min >= 29 and min <= 31) then
-                isTrialWindow = true
-                currentHalf = 1
-            end
-            
-            local trackHour = hour
-            if min >= 59 then
-                trackHour = (hour + 1) % 24
-            end
-            
-            local alreadyCompleted = (_G.LastTrialCompletedHour == trackHour and _G.LastTrialCompletedHalf == currentHalf)
-            
-            _G.IsTrialActive = inTrialMode or (isTrialWindow and not alreadyCompleted)
-            
-            if not inTrialMode then
-                if isTrialWindow and not alreadyCompleted then
-                    -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธโ€ขเน€เธเธ”เน€เธโ€เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธย Raid เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธย
-                    local isInRaid = false
-                    pcall(function()
-                        local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
-                        if mode and string.find(string.lower(mode), "towerraid") then
-                            isInRaid = true
-                        end
-                    end)
-                    
-                    
-                    -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธย Raid เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธโ€ขเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ
-                    pcall(function()
-                        if isInRaid then
-                            Bridge:FireServer("Gamemodes", "TowerRaid", "Leave")
-                            Bridge:FireServer("Gamemodes", "TowerRaid", "Claim")
-                            Bridge:FireServer("Gamemodes", "TowerRaid", "Exit")
-                                
-                                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                                if hrp then
-                                    local raidMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid")
-                                    if raidMap then
-                                        for _, v in ipairs(raidMap:GetDescendants()) do
-                                            if v:IsA("ProximityPrompt") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave") then
-                                                local target = v:IsA("ProximityPrompt") and v.Parent or v
-                                                if target and (target:IsA("BasePart") or target:IsA("Model")) then
-                                                    hrp.CFrame = target:IsA("Model") and target:GetPivot() or target.CFrame
-                                                    task.wait(0.5)
-                                                    if v:IsA("ProximityPrompt") and fireproximityprompt then
-                                                        fireproximityprompt(v)
-                                                    end
-                                                    break
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                                
-                                SafeUITeleport("Lobby")
-                                task.wait(2)
-                        end
-                    end)
-                    
-                    -- 1. เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธย เน€เธยเน€เธเธ…เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธยเน€เธเธ…เน€เธยเน€เธเธ -> เน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโ€”เน€เธเธ•เน€เธย Lobby
-                    local trialDoor = nil
-                    pcall(function()
-                        trialDoor = workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
-                        if not trialDoor then
-                            trialDoor = workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
-                        end
-                    end)
-                    
-                    if not trialDoor then
-                        if not _G.HasJoinedTrialLobby then
-                            local inLobby = false
-                            pcall(function()
-                                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-                                if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
-                                    local Main = require(ps.Scripts.Client.Main)
-                                    if Main and Main.Player and Main.Player:GetAttribute("Mode") == "Lobby" then
-                                        inLobby = true
-                                    end
-                                end
-                            end)
-                            
-                            -- Fallback Lobby Check: If Trial_Join has loaded parts, we are in the Lobby
-                            if not inLobby then
-                                local td = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
-                                if td and td:FindFirstChildWhichIsA("BasePart", true) then
-                                    inLobby = true
-                                end
-                            end
-                            
-                            if not inLobby then
-                                pcall(function()
-                                    SafeUITeleport("Lobby")
-                                end)
-                                task.wait(3)
-                            else
-                                -- Already in Lobby, just wait for the door to spawn at XX:00
-                                task.wait(1)
-                            end
-                        end
-                    else
-                        -- เน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ Trial เน€เธยเน€เธเธ…เน€เธยเน€เธเธ (เน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’ XX:00)
-                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            local part = trialDoor:FindFirstChildWhichIsA("BasePart", true)
-                            if part then
-                                local dist = (hrp.Position - part.Position).Magnitude
-                                if dist > 10 then
-                                    hrp.CFrame = part.CFrame
-                                    hrp.Velocity = Vector3.new(0,0,0)
-                                    task.wait(0.5)
-                                end
-                            end
-                            
-                            -- เน€เธเธเน€เธเธ”เน€เธยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’ Trial เน€เธเธเน€เธเธ‘เน€เธเธเน€เธย เน€เธโ€”เน€เธเธเน€เธย 2 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธโ€เน€เธเธ–เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธเน€เธย (inTrialMode เน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ’เน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธย true เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธโ€เน€เธเธ…เน€เธเธเน€เธยเน€เธยเน€เธเธ•เน€เธยเน€เธโฌเน€เธเธเน€เธย)
-                            pcall(function()
-                                local prompt = trialDoor:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                if prompt and fireproximityprompt then
-                                    fireproximityprompt(prompt)
-                                end
-                                Bridge:FireServer("Gamemodes", "Trial", "Join")
-                                _G.InTrialFlag = true -- เน€เธโ€ขเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธยเน€เธย Trial เน€เธยเน€เธเธ…เน€เธยเน€เธเธ
-                                
-                                local confirmUI = LocalPlayer.PlayerGui:FindFirstChild("Confirmation")
-                                if confirmUI and confirmUI.Enabled then
-                                    confirmUI.Enabled = false
-                                end
-                            end)
-                            
-                            task.wait(2)
-                        end
-                    end
-                else
-                    if _G.WasInTrial then
-                        local safeToWarp = false
-                        local mode = ""
-                        pcall(function()
-                            mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
-                        end)
-                        if mode == "Lobby" or mode == "Town" or mode == "Trade" or mode == "TowerCity" then
-                            safeToWarp = true
-                        end
-                        
-                        -- Fallback just in case Mode isn't set
-                        if not safeToWarp then
-                            local trialMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Map")
-                            if not trialMap then
-                                safeToWarp = true
-                            end
-                        end
-                        
-                        if safeToWarp then
-                            _G.WasInTrial = false
-                            _G.HasJoinedTrialLobby = false
-                            
-                            -- Teleport back to selected map when exiting Trial
-                            if _G.SelectedQuestKey then
-                                local activeMapKey = _G.SelectedQuestKey
-                                local qData = QuestData[activeMapKey]
-                                if qData and qData.Module then
-                                    pcall(function()
-                                        SafeUITeleport(qData.Module)
-                                    end)
-                                    task.wait(2.5)
-                                end
-                            end
-                        end
-                    end
-                end
-            else
-                _G.WasInTrial = true
-                _G.HasJoinedTrialLobby = false
-                
-                -- เน€เธยเน€เธเธเน€เธเธเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€ขเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ’เน€เธเธ…เน€เธยเน€เธเธเน€เธเธ“เน€เธโฌเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธยเน€เธโฌเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธเธ…เน€เธเธ เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ“
-                _G.LastTrialCompletedHour = trackHour
-                _G.LastTrialCompletedHalf = currentHalf
-                
-                local currentWave = 1
-                pcall(function()
-                    local rsTrial = game:GetService("ReplicatedStorage"):FindFirstChild("Gamemodes")
-                    if rsTrial and rsTrial:FindFirstChild("Trial") and rsTrial.Trial:FindFirstChild("Wave") then
-                        currentWave = tonumber(rsTrial.Trial.Wave.Value) or currentWave
-                    end
-                    
-                    if currentWave == 1 then
-                        local trialUI = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("Trial")
-                        if trialUI and trialUI:FindFirstChild("Frame") and trialUI.Frame:FindFirstChild("Wave") then
-                            local w = string.match(trialUI.Frame.Wave.Text, "%d+")
-                            if w then currentWave = tonumber(w) end
-                        else
-                            for _, obj in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
-                                if obj:IsA("TextLabel") and obj.Visible then
-                                    local lowerText = string.lower(obj.Text)
-                                    if string.find(lowerText, "wave") and not string.find(lowerText, "next") and not string.find(lowerText, "in") then
-                                        local w = string.match(lowerText, "wave%s*:?%s*(%d+)")
-                                        if not w then
-                                            w = string.match(obj.Text, "%d+")
-                                        end
-                                        if w then currentWave = tonumber(w) break end
-                                    end
-                                end
+                                inTrialMode = false
                             end
                         end
                     end
                 end)
-
-                local trialFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
-                local trialEnemiesFolder = trialFolder and trialFolder:FindFirstChild("Enemies")
-                
-                if trialEnemiesFolder then
-                    local targetEnemy = nil
-                    local targetHRP = nil
-                    local shortestDistance = math.huge
-                    local playerHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    
-                    for _, v in ipairs(trialEnemiesFolder:GetChildren()) do
-                        local eHRP = (v:IsA("Model") and v:FindFirstChild("HumanoidRootPart")) or (v:IsA("BasePart") and v)
-                        
-                        local isAlive = true
-                        if v:IsA("Model") and v:FindFirstChild("Humanoid") then
-                            isAlive = v.Humanoid.Health > 0
-                            if v.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
-                        end
-                        if v:GetAttribute("Health") ~= nil and v:GetAttribute("Health") <= 0 then isAlive = false end
-                        if v:GetAttribute("Dead") == true or v:GetAttribute("Died") == true or v:GetAttribute("IsDead") == true then isAlive = false end
-                        
-                        if eHRP and isAlive then
-                            if playerHRP then
-                                local dist = (playerHRP.Position - eHRP.Position).Magnitude
-                                if dist < shortestDistance then
-                                    shortestDistance = dist
-                                    targetEnemy = v
-                                    targetHRP = eHRP
-                                end
-                            else
-                                targetEnemy = v
-                                targetHRP = eHRP
-                                break
-                            end
-                        end
-                    end
-                    
-                    if targetEnemy and playerHRP then
-                        local mCFrame = targetHRP.CFrame
-                        local mPos = targetHRP.Position
-                        
-                        -- เน€เธยเน€เธเธ“เน€เธยเน€เธเธเน€เธโ€เน€เธโฌเน€เธเธเน€เธยเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธย (เน€เธโ€ขเน€เธเธ‘เน€เธโ€เน€เธยเน€เธยเน€เธย Y เน€เธเธเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธเธ”เน€เธยเน€เธโ€ขเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโฌเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย)
-                        local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
-                        if flatLook.Magnitude > 0.001 then
-                            flatLook = flatLook.Unit
-                        else
-                            flatLook = Vector3.new(0, 0, -1)
-                        end
-                        
-                        -- เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย 5 Studs เน€เธยเน€เธเธ…เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธเธ’เน€เธเธเน€เธเธเน€เธย
-                        local behindPos = mPos - (flatLook * 5)
-                        playerHRP.CFrame = CFrame.new(behindPos, mPos)
-                        playerHRP.Velocity = Vector3.new(0, 0, 0)
-                        
+            
+                if _G.InTrialFlag then
+                    inTrialMode = true
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
                         pcall(function()
-                            Bridge:FireServer("Fighters", "Click", "Damage")
-                            Bridge:FireServer("Fighters", "Move", "Attack", targetEnemy:GetAttribute("Location") or targetHRP.Position, targetEnemy)
-                            
-                            -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ• (Attack)
-                            local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
-                            if tool then
-                                LocalPlayer.Character.Humanoid:EquipTool(tool)
-                                tool:Activate()
+                            local trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                            if not trialDoor then
+                                trialDoor = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
                             end
+                            if trialDoor then
+                                local targetPos
+                                if trialDoor:IsA("Model") then
+                                    targetPos = trialDoor.PrimaryPart and trialDoor.PrimaryPart.Position or trialDoor:GetPivot().Position
+                                else
+                                    targetPos = trialDoor.Position
+                                end
                             
-                            -- Removed VirtualUser clicking to prevent unwanted UI clicks
-                            -- local vu = game:GetService("VirtualUser")
-                            -- vu:CaptureController()
-                            -- vu:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                            -- vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                                if targetPos and (hrp.Position - targetPos).Magnitude < 100 then
+                                    inTrialMode = false
+                                    _G.InTrialFlag = false
+                                end
+                            end
                         end)
                     end
                 end
+            
+                local currentTime = os.date("*t")
+                local min = currentTime.min
+                local hour = currentTime.hour
+            
+                local isTrialWindow = false
+                local currentHalf = 0
+            
+                if (min >= 59 or min <= 1) then
+                    isTrialWindow = true
+                    currentHalf = 0
+                elseif (min >= 29 and min <= 31) then
+                    isTrialWindow = true
+                    currentHalf = 1
+                end
+            
+                local trackHour = hour
+                if min >= 59 then
+                    trackHour = (hour + 1) % 24
+                end
+            
+                local alreadyCompleted = (_G.LastTrialCompletedHour == trackHour and _G.LastTrialCompletedHalf == currentHalf)
+            
+                _G.IsTrialActive = inTrialMode or (isTrialWindow and not alreadyCompleted)
+            
+                if not inTrialMode then
+                    if isTrialWindow and not alreadyCompleted then
+                        local isInRaid = false
+                        pcall(function()
+                            local mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                            if mode and string.find(string.lower(mode), "towerraid") then
+                                isInRaid = true
+                            end
+                        end)
+                    
+                    
+                        pcall(function()
+                            if isInRaid then
+                                Bridge:FireServer("Gamemodes", "TowerRaid", "Leave")
+                                Bridge:FireServer("Gamemodes", "TowerRaid", "Claim")
+                                Bridge:FireServer("Gamemodes", "TowerRaid", "Exit")
+                                
+                                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                    if hrp then
+                                        local raidMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("TowerRaid")
+                                        if raidMap then
+                                            for _, v in ipairs(raidMap:GetDescendants()) do
+                                                if v:IsA("ProximityPrompt") or string.match(string.lower(v.Name), "exit") or string.match(string.lower(v.Name), "leave") then
+                                                    local target = v:IsA("ProximityPrompt") and v.Parent or v
+                                                    if target and (target:IsA("BasePart") or target:IsA("Model")) then
+                                                        hrp.CFrame = target:IsA("Model") and target:GetPivot() or target.CFrame
+                                                        task.wait(0.5)
+                                                        if v:IsA("ProximityPrompt") and fireproximityprompt then
+                                                            fireproximityprompt(v)
+                                                        end
+                                                        break
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                
+                                    SafeUITeleport("Lobby")
+                                    task.wait(2)
+                            end
+                        end)
+                    
+                        local trialDoor = nil
+                        pcall(function()
+                            trialDoor = workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                            if not trialDoor then
+                                trialDoor = workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Lobby") and workspace.Server.Trial.Lobby:FindFirstChild("Door")
+                            end
+                        end)
+                    
+                        if not trialDoor then
+                            if not _G.HasJoinedTrialLobby then
+                                local inLobby = false
+                                pcall(function()
+                                    local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                                    if ps and ps:FindFirstChild("Scripts") and ps.Scripts:FindFirstChild("Client") and ps.Scripts.Client:FindFirstChild("Main") then
+                                        local Main = require(ps.Scripts.Client.Main)
+                                        if Main and Main.Player and Main.Player:GetAttribute("Mode") == "Lobby" then
+                                            inLobby = true
+                                        end
+                                    end
+                                end)
+                            
+                                -- Fallback Lobby Check: If Trial_Join has loaded parts, we are in the Lobby
+                                if not inLobby then
+                                    local td = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Misc_Teleports") and workspace.Server.Misc_Teleports:FindFirstChild("Trial_Join")
+                                    if td and td:FindFirstChildWhichIsA("BasePart", true) then
+                                        inLobby = true
+                                    end
+                                end
+                            
+                                if not inLobby then
+                                    pcall(function()
+                                        SafeUITeleport("Lobby")
+                                    end)
+                                    task.wait(3)
+                                else
+                                    -- Already in Lobby, just wait for the door to spawn at XX:00
+                                    task.wait(1)
+                                end
+                            end
+                        else
+                            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                local part = trialDoor:FindFirstChildWhichIsA("BasePart", true)
+                                if part then
+                                    local dist = (hrp.Position - part.Position).Magnitude
+                                    if dist > 10 then
+                                        hrp.CFrame = part.CFrame
+                                        hrp.Velocity = Vector3.new(0,0,0)
+                                        task.wait(0.5)
+                                    end
+                                end
+                            
+                                pcall(function()
+                                    local prompt = trialDoor:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if prompt and fireproximityprompt then
+                                        fireproximityprompt(prompt)
+                                    end
+                                    Bridge:FireServer("Gamemodes", "Trial", "Join")
+                                
+                                    local confirmUI = LocalPlayer.PlayerGui:FindFirstChild("Confirmation")
+                                    if confirmUI and confirmUI.Enabled then
+                                        confirmUI.Enabled = false
+                                    end
+                                end)
+                            
+                                task.wait(2)
+                            end
+                        end
+                    else
+                        if _G.WasInTrial then
+                            local safeToWarp = false
+                            local mode = ""
+                            pcall(function()
+                                mode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
+                            end)
+                            if mode == "Lobby" or mode == "Town" or mode == "Trade" or mode == "TowerCity" then
+                                safeToWarp = true
+                            end
+                        
+                            -- Fallback just in case Mode isn't set
+                            if not safeToWarp then
+                                local trialMap = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial") and workspace.Server.Trial:FindFirstChild("Map")
+                                if not trialMap then
+                                    safeToWarp = true
+                                end
+                            end
+                        
+                            if safeToWarp then
+                                _G.WasInTrial = false
+                                _G.HasJoinedTrialLobby = false
+                            
+                                -- Teleport back to selected map when exiting Trial
+                                if _G.SelectedQuestKey then
+                                    local activeMapKey = _G.SelectedQuestKey
+                                    local qData = QuestData[activeMapKey]
+                                    if qData and qData.Module then
+                                        pcall(function()
+                                            SafeUITeleport(qData.Module)
+                                        end)
+                                        task.wait(2.5)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                else
+                    _G.WasInTrial = true
+                    _G.HasJoinedTrialLobby = false
+                
+                    _G.LastTrialCompletedHour = trackHour
+                    _G.LastTrialCompletedHalf = currentHalf
+                
+                    local currentWave = 1
+                    pcall(function()
+                        local rsTrial = game:GetService("ReplicatedStorage"):FindFirstChild("Gamemodes")
+                        if rsTrial and rsTrial:FindFirstChild("Trial") and rsTrial.Trial:FindFirstChild("Wave") then
+                            currentWave = tonumber(rsTrial.Trial.Wave.Value) or currentWave
+                        end
+                    
+                        if currentWave == 1 then
+                            local trialUI = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("Trial")
+                            if trialUI and trialUI:FindFirstChild("Frame") and trialUI.Frame:FindFirstChild("Wave") then
+                                local w = string.match(trialUI.Frame.Wave.Text, "%d+")
+                                if w then currentWave = tonumber(w) end
+                            else
+                                for _, obj in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+                                    if obj:IsA("TextLabel") and obj.Visible then
+                                        local lowerText = string.lower(obj.Text)
+                                        if string.find(lowerText, "wave") and not string.find(lowerText, "next") and not string.find(lowerText, "in") then
+                                            local w = string.match(lowerText, "wave%s*:?%s*(%d+)")
+                                            if not w then
+                                                w = string.match(obj.Text, "%d+")
+                                            end
+                                            if w then currentWave = tonumber(w) break end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+
+                    local trialFolder = workspace:FindFirstChild("Server") and workspace.Server:FindFirstChild("Trial")
+                    local trialEnemiesFolder = trialFolder and trialFolder:FindFirstChild("Enemies")
+                
+                    if trialEnemiesFolder then
+                        local targetEnemy = nil
+                        local targetHRP = nil
+                        local shortestDistance = math.huge
+                        local playerHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    
+                        for _, v in ipairs(trialEnemiesFolder:GetChildren()) do
+                            local eHRP = (v:IsA("Model") and v:FindFirstChild("HumanoidRootPart")) or (v:IsA("BasePart") and v)
+                        
+                            local isAlive = true
+                            if v:IsA("Model") and v:FindFirstChild("Humanoid") then
+                                isAlive = v.Humanoid.Health > 0
+                                if v.Humanoid:GetState() == Enum.HumanoidStateType.Dead then isAlive = false end
+                            end
+                            if v:GetAttribute("Health") ~= nil and v:GetAttribute("Health") <= 0 then isAlive = false end
+                            if v:GetAttribute("Dead") == true or v:GetAttribute("Died") == true or v:GetAttribute("IsDead") == true then isAlive = false end
+                        
+                            if eHRP and isAlive then
+                                if playerHRP then
+                                    local dist = (playerHRP.Position - eHRP.Position).Magnitude
+                                    if dist < shortestDistance then
+                                        shortestDistance = dist
+                                        targetEnemy = v
+                                        targetHRP = eHRP
+                                    end
+                                else
+                                    targetEnemy = v
+                                    targetHRP = eHRP
+                                    break
+                                end
+                            end
+                        end
+                    
+                        if targetEnemy and playerHRP then
+                            local mCFrame = targetHRP.CFrame
+                            local mPos = targetHRP.Position
+                        
+                            local flatLook = Vector3.new(mCFrame.LookVector.X, 0, mCFrame.LookVector.Z)
+                            if flatLook.Magnitude > 0.001 then
+                                flatLook = flatLook.Unit
+                            else
+                                flatLook = Vector3.new(0, 0, -1)
+                            end
+                        
+                            local behindPos = mPos - (flatLook * 5)
+                            playerHRP.CFrame = CFrame.new(behindPos, mPos)
+                            playerHRP.Velocity = Vector3.new(0, 0, 0)
+                        
+                            pcall(function()
+                                Bridge:FireServer("Fighters", "Click", "Damage")
+                                Bridge:FireServer("Fighters", "Move", "Attack", targetEnemy:GetAttribute("Location") or targetHRP.Position, targetEnemy)
+                            
+                                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
+                                if tool then
+                                    LocalPlayer.Character.Humanoid:EquipTool(tool)
+                                    tool:Activate()
+                                end
+                            
+                                -- Removed VirtualUser clicking to prevent unwanted UI clicks
+                                -- local vu = game:GetService("VirtualUser")
+                                -- vu:CaptureController()
+                                -- vu:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                                -- vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                            end)
+                        end
+                    end
+                end
             end
-        end
+        end)
     end,
 })
 
@@ -2127,10 +2093,10 @@ Tab_OpenStar:CreateToggle({
         if _G.AutoEquipBest then
             task.spawn(function()
                 while _G.AutoEquipBest do
+                    task.wait(5)
                     pcall(function()
                         Bridge:FireServer("Fighters", "Inventory", "EquipBest")
                     end)
-                    task.wait(60) -- เน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -2142,7 +2108,6 @@ Tab_OpenStar:CreateToggle({
 -- ==========================================
 local Section_Gacha = Tab_OpenStar:CreateSection("Summoning")
 
--- เน€เธโ€เน€เธเธ–เน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธเธเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโ€เน€เธเธ’เน€เธเธ
 local StarMapList = {}
 for mapName, _ in pairs(QuestData) do
     table.insert(StarMapList, mapName)
@@ -2157,7 +2122,6 @@ Tab_OpenStar:CreateDropdown({
     Callback = function(Option)
         _G.SelectedStarMap = type(Option) == "table" and Option[1] or Option
         
-        -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธย Trial เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ…เน€เธย Raid เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธยเน€เธโ€”เน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ•
         task.spawn(function()
             local inRaidMode = false
             pcall(function()
@@ -2179,14 +2143,12 @@ Tab_OpenStar:CreateDropdown({
                 if qData and qData.Module then
                     local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
                     pcall(function()
-                        -- เน€เธเธเน€เธเธเน€เธเธเน€เธโ€เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธย
                         Bridge:FireServer("General", "Star", "Auto", false)
                         task.wait(0.5)
                         
                         SafeUITeleport(qData.Module)
                         task.wait(2)
                         
-                        -- เน€เธโฌเน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธย (เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธ Auto เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธเธเน€เธเธเน€เธเธเน€เธย)
                         if _G.FastAutoStar then
                             Bridge:FireServer("General", "Star", "Auto", true)
                         end
@@ -2216,7 +2178,6 @@ Tab_OpenStar:CreateToggle({
                 end)
             end)
         else
-            -- เน€เธยเน€เธเธ”เน€เธโ€เน€เธโฌเน€เธเธเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธ”เน€เธโ€ Toggle
             pcall(function()
                 Bridge:FireServer("General", "Star", "Auto", false)
             end)
@@ -2227,7 +2188,6 @@ Tab_OpenStar:CreateToggle({
 
 
 -- ==========================================
--- เนยโ€”เธเนเธย TELEPORT TAB
 -- ==========================================
 
 local Section_Islands = Tab_Teleport:CreateSection("Islands")
@@ -2256,7 +2216,6 @@ end
 
 -- ==========================================
 -- ==========================================
--- เนยยเนเธย BOOST TAB
 -- ==========================================
 local Section_Boost = Tab_Boost:CreateSection("Boost Settings")
 
@@ -2269,7 +2228,6 @@ local BoostOptions = {
     "Star Speed"
 }
 
--- เน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธเธเน€เธโ€เน€เธยเน€เธยเน€เธย UI เน€เธยเน€เธเธ‘เน€เธย ID เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธเธ
 local BoostIDs = {
     ["Coins I"] = "CoinsI", ["Coins II"] = "CoinsII", ["Coins III"] = "CoinsIII",
     ["Damage I"] = "DamageI", ["Damage II"] = "DamageII", ["Damage III"] = "DamageIII",
@@ -2301,6 +2259,7 @@ Tab_Boost:CreateToggle({
         if _G.AutoBoosts then
             task.spawn(function()
                 while _G.AutoBoosts do
+                    task.wait(5)
                     pcall(function()
                         if _G.SelectedBoosts then
                             for k, v in pairs(_G.SelectedBoosts) do
@@ -2314,7 +2273,6 @@ Tab_Boost:CreateToggle({
                                 if boostName then
                                     local boostId = BoostIDs[boostName]
                                     if boostId then
-                                        -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธย UI เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ (เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ“ 100%)
                                         local isActive = false
                                         pcall(function()
                                             local boostsUI = LocalPlayer.PlayerGui.UI.Frames.Stats.Frame.Boosts.Frame
@@ -2324,16 +2282,13 @@ Tab_Boost:CreateToggle({
                                         end)
                                         
                                         if not isActive then
-                                            -- เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธย Active เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธยเน€เธยเน€เธโฌเน€เธเธ…เน€เธเธ! (เน€เธโ€“เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธ เน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธเธเน€เธย)
                                             Bridge:FireServer("General", "Inventory", "UseBoost", boostId)
-                                            task.wait(1) -- เน€เธเธเน€เธเธ 1 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•เน€เธยเน€เธเธเน€เธย UI เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ขเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธโ€“เน€เธเธ‘เน€เธโ€เน€เธยเน€เธย
                                         end
                                     end
                                 end
                             end
                         end
                     end)
-                    task.wait(3) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธโ€”เน€เธเธเน€เธยเน€เธย 3 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -2349,7 +2304,6 @@ Tab_Misc:CreateToggle({
         _G.AutoCodes = Value
         local Bridge = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Bridge")
         
-        -- เน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธโ€”เน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธเธเน€เธโ€เน€เธโ€”เน€เธเธ•เน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€ขเน€เธเธ…เน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธโ€
         local CodesList = {
             "SHUTDOWN8", "SHUTDOWN7", "SORRYSHUTDOWN", "UPDATE1",
             "3KPLAYERS", "500KVISITS", "MINIUPDATE", "2KLIKES",
@@ -2359,13 +2313,13 @@ Tab_Misc:CreateToggle({
         if _G.AutoCodes then
             task.spawn(function()
                 while _G.AutoCodes do
+                    task.wait(5)
                     pcall(function()
                         for _, code in ipairs(CodesList) do
                             Bridge:FireServer("General", "Codes", "Redeem", code)
                             task.wait(0.5)
                         end
                     end)
-                    task.wait(60) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ“เน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•
                 end
             end)
         end
@@ -2382,12 +2336,11 @@ Tab_Misc:CreateToggle({
         if _G.AutoInbox then
             task.spawn(function()
                 while _G.AutoInbox do
+                    task.wait(5)
                     pcall(function()
-                        -- เน€เธเธเน€เธเธ”เน€เธย Claim All เน€เธโ€ขเน€เธเธเน€เธยเน€เธย
                         Bridge:FireServer("General", "Inbox", "ClaimAll")
                         Bridge:FireServer("Rewards", "Inbox", "ClaimAll")
                         
-                        -- เน€เธยเน€เธโ€เน€เธยเน€เธเธเน€เธยเน€เธเธ Claim เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธโ€“เน€เธยเน€เธเธ’เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€ UI เน€เธยเน€เธเธเน€เธย
                         if LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
                             for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                                 if obj:IsA("TextButton") or obj:IsA("ImageButton") then
@@ -2418,7 +2371,6 @@ Tab_Misc:CreateToggle({
 })
 
 -- ==========================================
--- เนยยเนเธย PLAYER TAB
 -- ==========================================
 local Section_Movement = Tab_Player:CreateSection("Movement")
 
@@ -2452,7 +2404,6 @@ Tab_Player:CreateSlider({
 
 
 -- ==========================================
--- เนยยเนเธย TOWER RAID TAB
 -- ==========================================
 local Section_TowerRaid = Tab_Raid:CreateSection("Tower Raid Settings")
 
@@ -2489,7 +2440,6 @@ Tab_Raid:CreateToggle({
             while _G.AutoTowerRaid do
                 task.wait(1)
                 
-                -- Priority System: เน€เธโ€“เน€เธยเน€เธเธ’ Trial เน€เธโฌเน€เธยเน€เธเธ”เน€เธโ€เน€เธยเน€เธเธ…เน€เธเธเน€เธโ€“เน€เธเธ–เน€เธยเน€เธโฌเน€เธเธเน€เธเธ…เน€เธเธ’เน€เธยเน€เธเธ…เน€เธยเน€เธเธ เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธเธเน€เธโ€ Raid
                 if _G.AutoTrial and _G.IsTrialActive then
                     continue 
                 end
@@ -2563,7 +2513,6 @@ Tab_Raid:CreateToggle({
                             end
                         end
                         
-                        -- เน€เธเธเน€เธเธ‘เน€เธเธเน€เธยเน€เธเธ‘เน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธโ€ขเน€เธเธ Exit เน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธโ€ ProximityPrompt เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธย
                         local hrp = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then
                             pcall(function()
@@ -2634,7 +2583,6 @@ Tab_Raid:CreateToggle({
                 end
                 
                 if targetEnemy and targetHRP then
-                    -- เน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธโ€ขเน€เธเธ• เน€เธยเน€เธยเน€เธเธ…เน€เธเธเน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ
                     local tpDist = 2
                     hrp.CFrame = targetHRP.CFrame * CFrame.new(0, 0, tpDist)
                     hrp.Velocity = Vector3.new(0, 0, 0)
@@ -2643,7 +2591,6 @@ Tab_Raid:CreateToggle({
                     Bridge:FireServer("Fighters", "Click", "Damage")
                     Bridge:FireServer("Fighters", "Move", "Attack", targetEnemy:GetAttribute("Location") or targetHRP.Position, targetEnemy)
                     
-                    -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธโ€ขเน€เธเธ• (Attack)
                     pcall(function()
                         local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
                         if tool then
@@ -2658,7 +2605,6 @@ Tab_Raid:CreateToggle({
                         -- vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
                     end)
                 else
-                    -- เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธโฌเน€เธโ€ขเน€เธเธเน€เธเธเน€เธย เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ เน€เธเธเน€เธเธเน€เธเธ—เน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธย Auto Create/Join เน€เธโ€”เน€เธเธ“เน€เธยเน€เธเธ’เน€เธย
                     task.wait(1)
                 end
             end
@@ -2830,6 +2776,7 @@ Tab_Trial:CreateToggle({
         if _G.AutoTrialMerchant then
             task.spawn(function()
                 while _G.AutoTrialMerchant do
+                    task.wait(5)
                     pcall(function()
                         if _G.SelectedTrialMerchantItems then
                             for k, v in pairs(_G.SelectedTrialMerchantItems) do
@@ -2842,12 +2789,10 @@ Tab_Trial:CreateToggle({
                                 
                                 if itemName and TrialMerchantMapping[itemName] then
                                     Bridge:FireServer("General", "TrialMerchant", "Buy", TrialMerchantMapping[itemName])
-                                    task.wait(0.05) -- เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธเธเน€เธเธ’เน€เธยเน€เธย (20 เน€เธยเน€เธเธ”เน€เธยเน€เธยเน€เธโ€ขเน€เธยเน€เธเธเน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ•)
                                 end
                             end
                         end
                     end)
-                    task.wait(1) -- เน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธโ€”เน€เธเธเน€เธยเน€เธย 1 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• (เน€เธโฌเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธย 5 เน€เธโฌเน€เธโ€”เน€เธยเน€เธเธ’)
                 end
             end)
         end
@@ -2867,7 +2812,6 @@ Tab_Misc:CreateToggle({
             while _G.AutoBattlepass do
                 task.wait(10)
                 pcall(function()
-                    -- เน€เธเธเน€เธเธ”เน€เธย Claim All 
                     Bridge:FireServer("General", "Battlepass", "ClaimAll")
                     Bridge:FireServer("Rewards", "Battlepass", "ClaimAll")
                     
@@ -2996,13 +2940,12 @@ local Lbl_Strength = Tab_Info:CreateLabel({Name = "⚔ Strength: ???", Gradient 
 
 -- Auto Refresh Info Loop
 task.spawn(function()
-    while task.wait(0.5) do -- เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธโ€เน€เธโ€”เน€เธยเน€เธเธเน€เธยเน€เธเธ–เน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธเน€เธยเน€เธย 0.5 เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ’เน€เธโ€”เน€เธเธ• (Realtime)
+    while task.wait(1) do
         pcall(function()
             local lp = game:GetService("Players").LocalPlayer
             local ls = lp:FindFirstChild("leaderstats")
             
             local function getStat(names)
-                -- 1. เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย leaderstats
                 if ls then
                     for _, child in ipairs(ls:GetChildren()) do
                         local cName = string.lower(child.Name)
@@ -3011,7 +2954,6 @@ task.spawn(function()
                         end
                     end
                 end
-                -- 2. เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย Attributes
                 for attr, val in pairs(lp:GetAttributes()) do
                     local aName = string.lower(attr)
                     for _, n in ipairs(names) do
@@ -3029,7 +2971,6 @@ task.spawn(function()
             local playtime = getStat({"time", "play"})
             local strength = getStat({"strength", "power"})
 
-            -- Fallback เน€เธเธเน€เธเธ’เน€เธยเน€เธเธ’เน€เธย Main.Data เน€เธโ€“เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ‘เน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธย 0
             pcall(function()
                 local ps = lp:FindFirstChild("PlayerScripts")
                 if ps then
@@ -3049,7 +2990,6 @@ task.spawn(function()
                 end
             end)
 
-            -- Fallback เน€เธเธเน€เธเธ’ Strength เน€เธยเน€เธเธ’เน€เธย Damage Package
             if strength == 0 then
                 pcall(function()
                     local Damage = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Damage"))
@@ -3088,7 +3028,6 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- เนยยเนเธย SETTINGS TAB
 -- ==========================================
 local Tab_Settings = Window:CreateTab("Settings")
 local Section_Settings = Tab_Settings:CreateSection("UI Settings")
@@ -3187,6 +3126,29 @@ Tab_Settings:CreateSlider({
                 if mainFrame then
                     local stroke = mainFrame:FindFirstChildOfClass("UIStroke")
                     if stroke then stroke.Thickness = Value end
+                end
+            end
+        end)
+    end,
+})
+
+Tab_Settings:CreateSlider({
+    Name = "UI Scale",
+    Range = {50, 150},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 100,
+    Flag = "Slider_UIScale",
+    Callback = function(Value)
+        pcall(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("SKT_Hub_Custom") or (LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SKT_Hub_Custom"))
+            if sg then
+                local mainFrame = sg:FindFirstChild("MainFrame")
+                if mainFrame then
+                    local scaleObj = mainFrame:FindFirstChild("MainUIScale")
+                    if scaleObj then
+                        scaleObj.Scale = Value / 100
+                    end
                 end
             end
         end)
