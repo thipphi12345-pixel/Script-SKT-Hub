@@ -149,6 +149,7 @@ function SKT_UI:CreateWindow(options)
     MainFrame.BackgroundColor3 = UI_Config.MainColor
     MainFrame.BackgroundTransparency = 0.15 -- Glassmorphism
     MainFrame.BorderSizePixel = 0
+    MainFrame.Active = true
     MainFrame.ClipsDescendants = true
     MainFrame.Parent = SG
     CreateCorner(MainFrame, 8)
