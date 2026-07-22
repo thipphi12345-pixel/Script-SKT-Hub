@@ -1710,14 +1710,20 @@ Tab_Trial:CreateToggle({
                                 
                                 -- เน€เธเธเน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธโฌเน€เธยเน€เธเธ”เน€เธเธเน€เธยเน€เธยเน€เธโฌเน€เธเธเน€เธเธเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ…เน€เธโ€เน€เธโ€ขเน€เธเธ‘เน€เธเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธโ€”เน€เธเธ•เน€เธย Lobby เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ’เน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธย Quest Map เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธโ€เน€เธเธ–เน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ…เน€เธเธ‘เน€เธยเน€เธเธเน€เธเธ’
                                 local waitCount = 0
-                                while _G.AutoLeaveTrial and waitCount < 10 do
+                                while _G.AutoLeaveTrial and waitCount < 30 do
                                     task.wait(1)
                                     waitCount = waitCount + 1
                                     local currentMode = ""
                                     pcall(function()
                                         currentMode = game:GetService("Players").LocalPlayer:GetAttribute("Mode")
                                     end)
-                                    if currentMode == "Lobby" or currentMode == "Town" then
+                                    
+                                    local isTrial = false
+                                    if currentMode and currentMode ~= "" and string.find(string.lower(tostring(currentMode)), "trial") then
+                                        isTrial = true
+                                    end
+                                    
+                                    if currentMode and currentMode ~= "" and not isTrial then
                                         local targetMap = _G.SelectedQuestKey or "LevelingCity"
                                         local qData = QuestData[targetMap]
                                         
