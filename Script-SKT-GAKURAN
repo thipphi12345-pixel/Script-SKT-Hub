@@ -14,6 +14,33 @@
     └──────────────────────────────────────────────────────────────┘
 ]]
 
+-- // CLEANUP MECHANISM //
+if _G.GakuranHubLoaded then
+    if _G.GakuranHubUnload then pcall(_G.GakuranHubUnload) end
+end
+_G.GakuranHubLoaded = true
+local currentLoopId = math.random(1, 1000000)
+_G.GakuranHubLoopId = currentLoopId
+_G.GakuranHubConnections = {}
+
+_G.GakuranHubUnload = function()
+    _G.GakuranHubLoaded = false
+    _G.GakuranHubLoopId = -1
+    for _, conn in ipairs(_G.GakuranHubConnections) do
+        pcall(function() if conn.Disconnect then conn:Disconnect() end end)
+    end
+    _G.GakuranHubConnections = {}
+    local core = (gethui and gethui()) or game:GetService("CoreGui") or (game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+    if core and core:FindFirstChild("SKT_Hub_Custom") then
+        core["SKT_Hub_Custom"]:Destroy()
+    end
+    for _, esp in pairs(_G.EspObjects or {}) do
+        if esp.Box then esp.Box:Remove() end
+        if esp.Name then esp.Name:Remove() end
+    end
+    _G.EspObjects = {}
+end
+
 -- // SERVICES //
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -84,6 +111,7 @@ local myComboCount = 0
 
 local enemyAttackStart = {}
 local enemySkipped = {}
+local enemyPrevAttacking = {}
 local enemySkillStart = {}
 local enemyLastAttacked = {}
 local lockedTarget = nil
@@ -98,13 +126,13 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = (gethui and gethui()) or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
 local UI_Config = {
-    MainColor = Color3.fromRGB(15, 15, 22),
-    SidebarColor = Color3.fromRGB(10, 10, 15),
-    CardColor = Color3.fromRGB(20, 20, 28),
-    AccentColor = Color3.fromRGB(0, 255, 255), -- Sci-Fi Cyan Theme
-    TextColor = Color3.fromRGB(255, 255, 255),
-    DimTextColor = Color3.fromRGB(150, 150, 160),
-    Font = Enum.Font.GothamMedium,
+    MainColor = Color3.fromRGB(15, 10, 10),
+    SidebarColor = Color3.fromRGB(10, 5, 5),
+    CardColor = Color3.fromRGB(20, 12, 12),
+    AccentColor = Color3.fromRGB(220, 20, 40), -- Brutal Crimson Theme
+    TextColor = Color3.fromRGB(255, 230, 230),
+    DimTextColor = Color3.fromRGB(150, 110, 110),
+    Font = Enum.Font.GothamBold,
     LogoID = "rbxassetid://136267911004509",
 }
 
@@ -346,18 +374,14 @@ function SKT_UI:CreateWindow(options)
     end)
     
     CloseBtn.MouseButton1Click:Connect(function()
-        if type(getgenv) == "function" then
-            local genv = getgenv()
-            if type(genv.SKT_Toggles) == "table" then
-                for k, v in pairs(genv.SKT_Toggles) do
-                    if type(v) == "boolean" then genv.SKT_Toggles[k] = false end
-                end
-            end
-        end
         local tween = TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
         tween:Play()
         tween.Completed:Wait()
-        SG:Destroy()
+        if type(_G.GakuranHubUnload) == "function" then
+            pcall(_G.GakuranHubUnload)
+        else
+            SG:Destroy()
+        end
     end)
 
     MiniBtn.MouseButton1Click:Connect(function()
@@ -467,7 +491,7 @@ function SKT_UI:CreateWindow(options)
     HeaderText.Size = UDim2.new(0, 200, 1, 0)
     HeaderText.Position = UDim2.new(0, 15, 0, 0)
     HeaderText.BackgroundTransparency = 1
-    HeaderText.Text = "🗺️ Map: Anime Duelists"
+    HeaderText.Text = "🗺️ Gakutan"
     HeaderText.TextColor3 = UI_Config.AccentColor
     HeaderText.Font = Enum.Font.GothamBold
     HeaderText.TextSize = 14
@@ -562,6 +586,9 @@ function SKT_UI:CreateWindow(options)
         TabContent.ScrollBarThickness = 2
         TabContent.ScrollBarImageColor3 = UI_Config.AccentColor
         TabContent.Visible = false
+        TabContent.Active = true
+        TabContent.ScrollingEnabled = true
+        TabContent.CanvasSize = UDim2.new(0, 0, 0, 0)
         TabContent.Parent = ContentContainer
 
         local ContentLayout = Instance.new("UIListLayout")
@@ -1057,6 +1084,50 @@ function SKT_UI:CreateWindow(options)
             }
         end
 
+        function Tab:CreateTextbox(opts)
+            local BoxFrame = Instance.new("Frame")
+            BoxFrame.Size = UDim2.new(1, -10, 0, 45)
+            BoxFrame.BackgroundColor3 = UI_Config.CardColor
+            BoxFrame.Parent = TabContent
+            CreateCorner(BoxFrame, 6)
+            
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(0.4, -10, 1, 0)
+            Label.Position = UDim2.new(0, 15, 0, 0)
+            Label.BackgroundTransparency = 1
+            Label.Text = opts.Name
+            Label.TextColor3 = UI_Config.TextColor
+            Label.Font = UI_Config.Font
+            Label.TextSize = 14
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = BoxFrame
+            
+            local TextBox = Instance.new("TextBox")
+            TextBox.Size = UDim2.new(0.6, -20, 0, 30)
+            TextBox.Position = UDim2.new(0.4, 5, 0, 7)
+            TextBox.BackgroundColor3 = UI_Config.MainColor
+            TextBox.Text = opts.CurrentValue or ""
+            TextBox.PlaceholderText = opts.PlaceholderText or "Type here..."
+            TextBox.TextColor3 = UI_Config.TextColor
+            TextBox.Font = UI_Config.Font
+            TextBox.TextSize = 13
+            TextBox.Parent = BoxFrame
+            TextBox.ClearTextOnFocus = false
+            CreateCorner(TextBox, 4)
+            
+            TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+                if opts.Callback then
+                    opts.Callback(TextBox.Text)
+                end
+            end)
+            
+            return {
+                Set = function(self, newText)
+                    TextBox.Text = newText
+                end
+            }
+        end
+
         return Tab
     end
     
@@ -1067,41 +1138,59 @@ function SKT_UI:CreateWindow(options)
     return Window
 end
 
-local Window = SKT_UI:CreateWindow({Name = "SKT Hub - Ultimate Combat"})
+local Window = SKT_UI:CreateWindow({Name = "SKT Hub"})
 
-local Tab_Main = Window:CreateTab("Combat")
-Tab_Main:CreateSection("Auto Features")
-
-Tab_Main:CreateToggle({Name = "🛡️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
-    AutoParryEnabled = Value
-end})
-
-Tab_Main:CreateToggle({Name = "⚔️ Auto Attack (Combo/Chase)", CurrentValue = false, Flag = "AutoAttack", Callback = function(Value)
-    AutoAttackEnabled = Value
-end})
-
-Tab_Main:CreateToggle({Name = "🎯 Target Lock (Use Selector)", CurrentValue = false, Flag = "TargetLock", Callback = function(Value)
-    _G.TargetLockEnabled = Value
-end})
-
-Tab_Main:CreateSection("Target Selector")
-
-_G.TargetList = {}
-_G.TargetIndex = 0
-_G.SelectedTargetName = nil
-
-local function updateTargetList()
+local Tab_Main = Window:CreateTab("⚔️ Perfect Combat")
+local function updateTargetList(query)
+    query = query and string.lower(query) or ""
     local list = {}
+    
+    -- Add names that match the query
     for _, p in ipairs(game.Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            table.insert(list, p.Name)
+            local pName = string.lower(p.Name)
+            local pDisplay = string.lower(p.DisplayName)
+            if query == "" or string.find(pName, query, 1, true) or string.find(pDisplay, query, 1, true) then
+                table.insert(list, p.Name)
+            end
         end
     end
+    
+    -- Sort by shortest name to match closest
+    if query ~= "" then
+        table.sort(list, function(a, b) return #a < #b end)
+    end
+    
+    if #list == 0 then
+        table.insert(list, "None")
+    end
+    
     return list
 end
 
-local TargetDropdown = Tab_Main:CreateDropdown({
-    Name = "Select Target",
+Tab_Main:CreateSection("Target Selection")
+
+local TargetDropdown
+
+Tab_Main:CreateTextbox({
+    Name = "🔍 Search Name:",
+    PlaceholderText = "Type to search...",
+    Callback = function(text)
+        if TargetDropdown then
+            pcall(function()
+                local newList = updateTargetList(text)
+                TargetDropdown:Refresh(newList)
+                -- Auto select if there's an exact match
+                if #newList > 0 and newList[1] ~= "None" and text ~= "" then
+                    _G.SelectedTargetName = newList[1]
+                end
+            end)
+        end
+    end
+})
+
+TargetDropdown = Tab_Main:CreateDropdown({
+    Name = "Select Target (For Spectator & Combat)",
     Options = updateTargetList(),
     CurrentOption = {"None"},
     MultipleOptions = false,
@@ -1120,6 +1209,85 @@ Tab_Main:CreateButton({Name = "🔄 Refresh Targets", Callback = function()
     local newList = updateTargetList()
     TargetDropdown:Refresh(newList)
 end})
+
+Tab_Main:CreateButton({Name = "🚀 Teleport to Selected Target", Callback = function()
+    if _G.SelectedTargetName then
+        local p = game.Players:FindFirstChild(_G.SelectedTargetName)
+        if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                -- Teleport slightly above the target
+                char.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0)
+            end
+        end
+    end
+end})
+
+Tab_Main:CreateToggle({Name = "🎥 Spectator Mode (Follows Selected Target)", CurrentValue = false, Flag = "Spectator", Callback = function(Value)
+    _G.SpectatorEnabled = Value
+    if Value and _G.SelectedTargetName then
+        local p = game.Players:FindFirstChild(_G.SelectedTargetName)
+        if p and p.Character and p.Character:FindFirstChild("Humanoid") then
+            workspace.CurrentCamera.CameraSubject = p.Character.Humanoid
+        end
+    elseif not Value then
+        workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+    end
+end})
+
+Tab_Main:CreateSection("Auto Features")
+
+Tab_Main:CreateToggle({Name = "🛡️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
+    AutoParryEnabled = Value
+end})
+
+Tab_Main:CreateToggle({Name = "⚔️ Auto Attack (Combo/Chase)", CurrentValue = false, Flag = "AutoAttack", Callback = function(Value)
+    AutoAttackEnabled = Value
+end})
+
+_G.FaceTargetEnabled = true
+Tab_Main:CreateToggle({Name = "👁️ Face Target (Auto Aim)", CurrentValue = true, Flag = "FaceTarget", Callback = function(Value)
+    _G.FaceTargetEnabled = Value
+end})
+
+_G.TargetMode = "Near Lock Target"
+Tab_Main:CreateDropdown({Name = "🎯 Combat Target Mode", Options = {"Near Lock Target", "Nearest Target", "Selected Target", "Lowest Health Target"}, CurrentOption = "Near Lock Target", Flag = "TargetMode", Callback = function(Option)
+    local opt = type(Option) == "table" and Option[1] or Option
+    _G.TargetMode = opt
+end})
+
+local Tab_Finishing = Window:CreateTab("💀 Brutal Executions")
+Tab_Finishing:CreateSection("Execute & Carry Options")
+
+_G.FinishTargetMode = "Nearest Lock Target (Close Range)"
+Tab_Finishing:CreateDropdown({Name = "💀 Execute/Carry Target", Options = {"Nearest Lock Target (Close Range)", "Selected Target"}, CurrentOption = "Nearest Lock Target (Close Range)", Flag = "FinishTargetMode", Callback = function(Option)
+    local opt = type(Option) == "table" and Option[1] or Option
+    _G.FinishTargetMode = opt
+end})
+
+Tab_Finishing:CreateToggle({Name = "💀 Auto Execute (Grip)", CurrentValue = false, Flag = "AutoExecute", Callback = function(Value)
+    _G.AutoExecuteEnabled = Value
+end})
+
+Tab_Finishing:CreateToggle({Name = "🏋️ Auto Carry (When Knocked)", CurrentValue = false, Flag = "AutoCarry", Callback = function(Value)
+    _G.AutoCarryEnabled = Value
+end})
+
+local Tab_Survival = Window:CreateTab("🛡️ Ultimate Survival")
+Tab_Survival:CreateSection("Survival Tools")
+
+Tab_Survival:CreateToggle({Name = "🚫 Anti-Grab / Anti-Stun", CurrentValue = false, Flag = "AntiStun", Callback = function(Value)
+    _G.AntiStunEnabled = Value
+end})
+
+Tab_Survival:CreateToggle({Name = "🏃 Auto Save (Flee to Sky at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
+    _G.AutoFleeEnabled = Value
+end})
+
+Tab_Survival:CreateToggle({Name = "❤️ Auto Revive (Respawn/Struggle)", CurrentValue = false, Flag = "AutoRevive", Callback = function(Value)
+    _G.AutoReviveEnabled = Value
+end})
+
 
 Tab_Main:CreateSection("Status Information")
 
@@ -1140,7 +1308,97 @@ local TargetL = createTextProxy(Tab_Main:CreateLabel({Name = "Target: None"}))
 local ActionL = createTextProxy(Tab_Main:CreateLabel({Name = "", TextColor = UI_Config.DimTextColor}))
 local StatsL = createTextProxy(Tab_Main:CreateLabel({Name = "Parry:0  Hits:0  Kills:0", TextColor = Color3.fromRGB(90, 200, 90)}))
 
-local Tab_Settings = Window:CreateTab("Settings")
+local Tab_Visuals = Window:CreateTab("👁️ Tactical ESP")
+Tab_Visuals:CreateSection("ESP Settings")
+
+_G.ESP = {
+    Master = false,
+    Boxes = false,
+    HealthBar = false,
+    StaminaBar = false,
+    Tracers = false,
+    Highlight = false,
+    HeadDot = false,
+    Names = false,
+    Attributes = false
+}
+
+Tab_Visuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Flag = "ESP_Master", Callback = function(v) _G.ESP.Master = v end})
+Tab_Visuals:CreateToggle({Name = "Boxes", CurrentValue = false, Flag = "ESP_Boxes", Callback = function(v) _G.ESP.Boxes = v end})
+Tab_Visuals:CreateToggle({Name = "Health Bar", CurrentValue = false, Flag = "ESP_HealthBar", Callback = function(v) _G.ESP.HealthBar = v end})
+Tab_Visuals:CreateToggle({Name = "Stamina Bar", CurrentValue = false, Flag = "ESP_StaminaBar", Callback = function(v) _G.ESP.StaminaBar = v end})
+Tab_Visuals:CreateToggle({Name = "Tracers", CurrentValue = false, Flag = "ESP_Tracers", Callback = function(v) _G.ESP.Tracers = v end})
+Tab_Visuals:CreateToggle({Name = "Highlight", CurrentValue = false, Flag = "ESP_Highlight", Callback = function(v) _G.ESP.Highlight = v end})
+Tab_Visuals:CreateToggle({Name = "Head Dot", CurrentValue = false, Flag = "ESP_HeadDot", Callback = function(v) _G.ESP.HeadDot = v end})
+Tab_Visuals:CreateToggle({Name = "Names", CurrentValue = false, Flag = "ESP_Names", Callback = function(v) _G.ESP.Names = v end})
+Tab_Visuals:CreateToggle({Name = "Attributes", CurrentValue = false, Flag = "ESP_Attributes", Callback = function(v) _G.ESP.Attributes = v end})
+
+local Tab_ParrySettings = Window:CreateTab("⏱️ Precision Parry")
+Tab_ParrySettings:CreateSection("Adjust Parry Delay Per Style")
+
+for styleName, data in pairs(STYLE_DATA) do
+    Tab_ParrySettings:CreateSlider({
+        Name = string.upper(styleName) .. " M1 Delay",
+        Range = {0, 1},
+        Increment = 0.01,
+        CurrentValue = data.m1,
+        Flag = "Parry_M1_" .. styleName,
+        Callback = function(Value)
+            STYLE_DATA[styleName].m1 = Value
+        end,
+    })
+end
+
+local Tab_ServerHop = Window:CreateTab("🌐 Server Hopper")
+Tab_ServerHop:CreateSection("Server Management")
+Tab_ServerHop:CreateButton({Name = "🔄 Rejoin Current Server", Callback = function()
+    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, game.Players.LocalPlayer)
+end})
+Tab_ServerHop:CreateButton({Name = "🌐 Hop to Different Server", Callback = function()
+    local HttpService = game:GetService("HttpService")
+    local TeleportService = game:GetService("TeleportService")
+    local sfUrl = "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100"
+    pcall(function()
+        local req = request or http_request or (syn and syn.request) or (fluxus and fluxus.request)
+        if req then
+            local res = req({Url = string.format(sfUrl, game.PlaceId)})
+            if res and res.Body then
+                local body = HttpService:JSONDecode(res.Body)
+                if body and body.data then
+                    for _, v in ipairs(body.data) do
+                        if type(v) == "table" and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end})
+
+local Tab_Emote = Window:CreateTab("🕺 Emotes")
+Tab_Emote:CreateSection("Play Game Emotes")
+
+local function playEmote(emoteName)
+    pcall(function()
+        local TextChatService = game:GetService("TextChatService")
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            TextChatService.TextChannels.RBXGeneral:SendAsync("/e " .. emoteName)
+        else
+            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer("/e " .. emoteName, "All")
+        end
+    end)
+end
+
+local emotes = {"dance", "dance2", "dance3", "cheer", "laugh", "point", "wave", "sit"}
+for _, name in ipairs(emotes) do
+    Tab_Emote:CreateButton({Name = "Play: " .. name, Callback = function()
+        playEmote(name)
+    end})
+end
+
+local Tab_Settings = Window:CreateTab("⚙️ Hub Settings")
 Tab_Settings:CreateSection("UI Settings")
 
 local function getGui()
@@ -1151,14 +1409,15 @@ end
 
 Tab_Settings:CreateDropdown({
     Name = "Theme Color",
-    Options = {"Sci-Fi Cyan", "Neon Green", "Cyber Purple", "Ruby Red", "Solar Yellow", "Pure White"},
-    CurrentOption = {"Sci-Fi Cyan"},
+    Options = {"Blood Crimson (Brutal)", "Sci-Fi Cyan", "Neon Green", "Cyber Purple", "Ruby Red", "Solar Yellow", "Pure White"},
+    CurrentOption = {"Blood Crimson (Brutal)"},
     MultipleOptions = false,
     Flag = "Dropdown_ThemeColor",
     Callback = function(Value)
-        local color = Color3.fromRGB(0, 255, 255)
+        local color = Color3.fromRGB(220, 20, 40)
         local opt = type(Value) == "table" and Value[1] or Value
-        if opt == "Sci-Fi Cyan" then color = Color3.fromRGB(0, 255, 255)
+        if opt == "Blood Crimson (Brutal)" then color = Color3.fromRGB(220, 20, 40)
+        elseif opt == "Sci-Fi Cyan" then color = Color3.fromRGB(0, 255, 255)
         elseif opt == "Neon Green" then color = Color3.fromRGB(57, 255, 20)
         elseif opt == "Cyber Purple" then color = Color3.fromRGB(191, 0, 255)
         elseif opt == "Ruby Red" then color = Color3.fromRGB(255, 36, 0)
@@ -1166,6 +1425,7 @@ Tab_Settings:CreateDropdown({
         elseif opt == "Pure White" then color = Color3.fromRGB(255, 255, 255)
         end
         
+        local oldColor = UI_Config.AccentColor
         UI_Config.AccentColor = color
         
         pcall(function()
@@ -1182,6 +1442,17 @@ Tab_Settings:CreateDropdown({
                         obj.TextColor3 = color
                     elseif obj:IsA("TextLabel") and string.sub(obj.Text, 1, 3) == ">> " then
                         obj.TextColor3 = color
+                    elseif obj.Name == "SliderFill" then
+                        obj.BackgroundColor3 = color
+                    elseif obj.Name == "ToggleCircle" then
+                        if obj.Position.X.Offset == -17 then
+                            obj.BackgroundColor3 = color
+                            if obj.Parent and obj.Parent:IsA("TextButton") then
+                                obj.Parent.BackgroundColor3 = Color3.fromRGB(color.R*255*0.2, color.G*255*0.2, color.B*255*0.2)
+                            end
+                        end
+                    elseif obj:IsA("TextLabel") and obj.Name == "Status: Waiting..." then
+                        obj.TextColor3 = color
                     end
                 end
                 
@@ -1189,6 +1460,64 @@ Tab_Settings:CreateDropdown({
                 if miniBtn then
                     local mstroke = miniBtn:FindFirstChildOfClass("UIStroke")
                     if mstroke then mstroke.Color = color end
+                end
+            end
+        end)
+    end
+})
+
+Tab_Settings:CreateDropdown({
+    Name = "Background Theme",
+    Options = {"Blood Arena (Dark Red)", "Pitch Black", "Obsidian Dark", "Midnight Blue"},
+    CurrentOption = {"Blood Arena (Dark Red)"},
+    MultipleOptions = false,
+    Flag = "Dropdown_BgColor",
+    Callback = function(Value)
+        local opt = type(Value) == "table" and Value[1] or Value
+        
+        local oldMain = UI_Config.MainColor
+        local oldSide = UI_Config.SidebarColor
+        local oldCard = UI_Config.CardColor
+        
+        local main, side, card
+        if opt == "Blood Arena (Dark Red)" then 
+            main = Color3.fromRGB(15, 10, 10)
+            side = Color3.fromRGB(10, 5, 5)
+            card = Color3.fromRGB(20, 12, 12)
+        elseif opt == "Pitch Black" then
+            main = Color3.fromRGB(5, 5, 5)
+            side = Color3.fromRGB(0, 0, 0)
+            card = Color3.fromRGB(10, 10, 10)
+        elseif opt == "Obsidian Dark" then
+            main = Color3.fromRGB(20, 20, 25)
+            side = Color3.fromRGB(15, 15, 20)
+            card = Color3.fromRGB(25, 25, 30)
+        elseif opt == "Midnight Blue" then
+            main = Color3.fromRGB(10, 12, 25)
+            side = Color3.fromRGB(5, 8, 15)
+            card = Color3.fromRGB(15, 18, 30)
+        else
+            main = Color3.fromRGB(15, 10, 10)
+            side = Color3.fromRGB(10, 5, 5)
+            card = Color3.fromRGB(20, 12, 12)
+        end
+        
+        UI_Config.MainColor = main
+        UI_Config.SidebarColor = side
+        UI_Config.CardColor = card
+        
+        pcall(function()
+            local sg = getGui()
+            if sg then
+                for _, obj in ipairs(sg:GetDescendants()) do
+                    if obj:IsA("Frame") or obj:IsA("ScrollingFrame") then
+                        if obj.BackgroundColor3 == oldMain then obj.BackgroundColor3 = main
+                        elseif obj.BackgroundColor3 == oldSide then obj.BackgroundColor3 = side
+                        elseif obj.BackgroundColor3 == oldCard then obj.BackgroundColor3 = card
+                        end
+                    elseif obj:IsA("ImageButton") and obj.Name == "MiniBtn" then
+                        if obj.BackgroundColor3 == oldSide then obj.BackgroundColor3 = side end
+                    end
                 end
             end
         end)
@@ -1457,7 +1786,7 @@ local function findTarget()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil, 999 end
     local myPos = char.HumanoidRootPart.Position
     
-    if _G.TargetLockEnabled and _G.SelectedTargetName then
+    if _G.TargetMode == "Selected Target" and _G.SelectedTargetName then
         local p = game.Players:FindFirstChild(_G.SelectedTargetName)
         if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local h = p.Character:FindFirstChildOfClass("Humanoid")
@@ -1468,48 +1797,98 @@ local function findTarget()
         end
     end
     
-    if not _G.TargetLockEnabled and _G.CurrentClosestTarget then
-        local c = _G.CurrentClosestTarget
-        if c:FindFirstChild("HumanoidRootPart") then
+    if _G.TargetMode == "Near Lock Target" then
+        if _G.CurrentClosestTarget and _G.CurrentClosestTarget:FindFirstChild("HumanoidRootPart") then
+            local c = _G.CurrentClosestTarget
             local h = c:FindFirstChildOfClass("Humanoid")
             if h and h.Health > 0 and c:GetAttribute("Downed") ~= true then
                 local dist = (myPos - c.HumanoidRootPart.Position).Magnitude
-                if dist < 80 then -- Keep attacking them if they are within 80 studs!
+                -- STICKY LOCK: Keep targeting the one we are fighting as long as they are within 40 studs!
+                if dist < 40 then
                     return c, dist
                 end
             end
         end
-    end
-    
-    local best, bestDist = nil, 200
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local h = p.Character:FindFirstChildOfClass("Humanoid")
-            if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
-                local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-                if d < bestDist then
-                    bestDist = d
-                    best = p.Character
+        
+        local best, bestDist = nil, 200
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local h = p.Character:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
+                    local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        best = p.Character
+                    end
                 end
             end
         end
+        _G.CurrentClosestTarget = best
+        return best, bestDist
     end
-    lockedTarget = best
-    return best, bestDist
+    
+    if _G.TargetMode == "Nearest Target" then
+        local best, bestDist = nil, 200
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local h = p.Character:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
+                    local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        best = p.Character
+                    end
+                end
+            end
+        end
+        _G.CurrentClosestTarget = best
+        return best, bestDist
+    end
+    
+    if _G.TargetMode == "Lowest Health Target" then
+        local best, lowestHp = nil, math.huge
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local h = p.Character:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 and p.Character:GetAttribute("Downed") ~= true then
+                    local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if h.Health < lowestHp and d < 300 then
+                        lowestHp = h.Health
+                        best = p.Character
+                    end
+                end
+            end
+        end
+        return best, best and (best.HumanoidRootPart.Position - myPos).Magnitude or 999
+    end
+    
+    return nil, 999
 end
 
 -- // PARRY & ATTACK RANGE //
 local M1_RANGE = 7 -- Expanded from 5 for Hitbox Expander
 local M2_RANGE = 7
-local PARRY_RANGE = 8
+local PARRY_RANGE = 15 -- Reduced to 15 to ignore far away shadow-boxing
 local CHASE_RANGE = 500
 
 -- // MAIN BRAIN //
-RunService.RenderStepped:Connect(function()
+table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function()
     if not AutoParryEnabled and not AutoAttackEnabled then
         if isBlockingNow then releaseBlock() end
         STATE = "IDLE"
         StateL.Text = "Status: Idle (Toggles Off)"
+        
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.AutoRotate = true
+            char.Humanoid.WalkSpeed = 16
+            pcall(function()
+                char:SetAttribute("Running", false)
+                char:SetAttribute("Sprinting", false)
+            end)
+            local VirtualInputManager = game:GetService("VirtualInputManager")
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+        end
         return
     end
     
@@ -1529,35 +1908,18 @@ RunService.RenderStepped:Connect(function()
     local myPos = char.HumanoidRootPart.Position
     local now = os.clock()
     
-    -- // AUTO REVIVE (Restart your heart) //
-    local isDowned = char:GetAttribute("Downed") == true or hum.Health <= 0
-    pcall(function()
-        local deathUI = LocalPlayer.PlayerGui:FindFirstChild("DeathUI")
-        if deathUI then
-            if isDowned then
-                -- Throttle clicking to avoid crashing/freezing the UI (every 0.1s instead of 60 FPS)
-                if not _G.lastHeartPump or now - _G.lastHeartPump > 0.1 then
-                    _G.lastHeartPump = now
-                    local btn = deathUI:FindFirstChild("HeartButton", true)
-                    
-                    if btn and btn.Visible then
-                        task.spawn(function()
-                            pcall(function()
-                                local vim = game:GetService("VirtualInputManager")
-                                local vp = workspace.CurrentCamera.ViewportSize
-                                local x, y = vp.X / 2, vp.Y / 2
-                                vim:SendMouseButtonEvent(x, y, 0, true, game, 1)
-                                task.wait(0.01)
-                                vim:SendMouseButtonEvent(x, y, 0, false, game, 1)
-                            end)
-                        end)
-                    end
-                end
-            end
-        end
-    end)
+    local isDowned = char:GetAttribute("Downed") == true or char:GetAttribute("Knocked") == true or hum.Health <= 0
     
+    local prevTarget = lockedTarget
     local target, dist = findTarget()
+    
+    -- TRACK KNOCKED TARGET (The one we just beat up)
+    if prevTarget and prevTarget ~= target then
+        if prevTarget:GetAttribute("Knocked") or prevTarget:GetAttribute("Downed") then
+            _G.LastKnockedTarget = prevTarget
+            _G.LastKnockedTime = os.clock()
+        end
+    end
     
     if not target then
         STATE = "IDLE"
@@ -1565,6 +1927,69 @@ RunService.RenderStepped:Connect(function()
         StateL.Text = "Status: Scanning..."
         TargetL.Text = "Target: None"
         ActionL.Text = "Waiting for enemies..."
+        pcall(function()
+            char:SetAttribute("Running", false)
+            char:SetAttribute("Sprinting", false)
+        end)
+        if hum.WalkSpeed > 16 then hum.WalkSpeed = 16 end
+        
+        -- Handle LocalPlayer Movement options (WalkSpeed, JumpPower, Fly)
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            
+            if hum then
+                if _G.WS_Enabled and _G.WS_Value then
+                    hum.WalkSpeed = _G.WS_Value
+                end
+                if _G.JP_Enabled and _G.JP_Value then
+                    hum.UseJumpPower = true
+                    hum.JumpPower = _G.JP_Value
+                end
+            end
+            
+            if _G.Fly_Enabled and hrp and camera then
+                if not _G.FlyBodyVelocity or not _G.FlyBodyVelocity.Parent then
+                    local bv = Instance.new("BodyVelocity")
+                    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                    bv.Velocity = Vector3.new(0, 0, 0)
+                    bv.Parent = hrp
+                    _G.FlyBodyVelocity = bv
+                    
+                    local bg = Instance.new("BodyGyro")
+                    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+                    bg.CFrame = hrp.CFrame
+                    bg.Parent = hrp
+                    _G.FlyBodyGyro = bg
+                end
+                
+                local speed = _G.Fly_Speed or 50
+                local vel = Vector3.new(0, 0, 0)
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    vel = vel + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    vel = vel - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    vel = vel - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    vel = vel + camera.CFrame.RightVector
+                end
+                
+                if vel.Magnitude > 0 then
+                    _G.FlyBodyVelocity.Velocity = vel.Unit * speed
+                else
+                    _G.FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                end
+                _G.FlyBodyGyro.CFrame = camera.CFrame
+            end
+        end
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
         return
     end
     
@@ -1574,18 +1999,44 @@ RunService.RenderStepped:Connect(function()
     -- Ensure we are alive to fight!
     if isDowned then return end
     
+    -- Ensure we are not currently executing or carrying someone!
+    if _G.IsExecuting then return end
+    
+    -- FACE TARGET LOGIC
+    if _G.FaceTargetEnabled and not isDowned then
+        hum.AutoRotate = false -- Disable built-in rotation so it doesn't fight our CFrame update
+        local lookDir = (targetRoot.Position - myPos)
+        if lookDir.Magnitude > 0 then
+            lookDir = lookDir.Unit
+            char.HumanoidRootPart.CFrame = CFrame.new(myPos, myPos + Vector3.new(lookDir.X, 0, lookDir.Z))
+        end
+    else
+        hum.AutoRotate = true
+    end
+    
     local e_attacking = enemyIsAttacking(target)
+    local prev_attacking = enemyPrevAttacking[target] or false
+    local temp_e_isHeavy = enemyIsHeavyAttacking(target)
+    local temp_hitboxDelay = getHitboxDelay(target, temp_e_isHeavy)
+    
     if e_attacking then
         enemyLastAttacked[target] = now
-        if not enemyAttackStart[target] then
+        -- If it's a new punch in the combo, OR if it's the first punch
+        if not prev_attacking or not enemyAttackStart[target] then
             enemyAttackStart[target] = now
             enemySkipped[target] = nil
         end
     else
-        -- EXACTLY AS REQUESTED: If they stop attacking, we immediately transition out of defense
-        enemyAttackStart[target] = nil
-        enemySkipped[target] = nil
+        -- Do not immediately clear attack state! Attack attributes in this game often pulse briefly.
+        -- We must keep the defense state alive until the parry window has fully passed.
+        if enemyAttackStart[target] then
+            if (now - enemyAttackStart[target]) > (temp_hitboxDelay + 0.3) then
+                enemyAttackStart[target] = nil
+                enemySkipped[target] = nil
+            end
+        end
     end
+    enemyPrevAttacking[target] = e_attacking
     
     local e_skill = enemyIsUsingSkill(target)
     if e_skill then
@@ -1660,18 +2111,18 @@ RunService.RenderStepped:Connect(function()
             StateL.Text = "Status: ⏳ WAIT RESET"
         else
             -- SINGLE PARRY LOGIC
-            local idealTime = hitboxDelay - 0.20
+            local idealTime = hitboxDelay - 0.125 -- Changed from 0.20 to exactly 0.125s (the perfect parry window)
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
                 StateL.Text = string.format("Status: ⏱️ TIMING (%.2fs)", idealTime - elapsed)
                 
-            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
+            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.10) then
                 -- Window for the first hit
                 STATE = "PARRY"
                 if not isBlockingNow then doBlock() end
-                parryEndTime = now + 0.25
+                parryEndTime = now + 0.20
                 StateL.Text = "Status: ⚡ M1 PARRY"
                 
             else
@@ -1714,6 +2165,16 @@ RunService.RenderStepped:Connect(function()
     elseif AutoAttackEnabled and dist > M1_RANGE and dist <= CHASE_RANGE then
         STATE = "CHASE"
         if isBlockingNow and dist > PARRY_RANGE then releaseBlock() end
+        
+        -- ทำให้ตัวละครวิ่ง (Sprint) จะได้ตามศัตรูทัน
+        pcall(function()
+            char:SetAttribute("Running", true)
+            char:SetAttribute("Sprinting", true)
+            hum.WalkSpeed = 24
+        end)
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+        
         hum:MoveTo(targetRoot.Position)
         
         if dist > 25 and not (e_attacking or e_skill) and char:GetAttribute("EvasiveCooldown") ~= true then
@@ -1738,8 +2199,10 @@ RunService.RenderStepped:Connect(function()
         STATE = "IDLE"
         if isBlockingNow then releaseBlock() end
         StateL.Text = "Status: 👁️ WATCHING"
-        TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+        TargetL.Text = string.format("Target: %s [%s] [%.0fst]", target.Name, string.upper(target:GetAttribute("CombatStyle") or "DEFAULT"), dist)
         ActionL.Text = "In range, waiting for opening..."
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end
     
     local th = target:FindFirstChildOfClass("Humanoid")
@@ -1749,7 +2212,7 @@ RunService.RenderStepped:Connect(function()
     end
     
     StatsL.Text = string.format("Parry: %d  |  Hits: %d  |  Kills: %d", stats.parries, stats.hits, stats.kills)
-end)
+end))
 
 -- // ANIMATION BACKUP LISTENER //
 task.spawn(function()
@@ -1760,7 +2223,7 @@ task.spawn(function()
         local anim = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 3)
         if not anim then return end
         
-        anim.AnimationPlayed:Connect(function(track)
+        table.insert(_G.GakuranHubConnections, anim.AnimationPlayed:Connect(function(track)
             if not AutoParryEnabled then return end
             local n = string.lower(track.Name or "")
             local isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
@@ -1775,34 +2238,449 @@ task.spawn(function()
                     end
                 end
             end
-        end)
+        end))
     end
     
     local function watch(p)
         if p == LocalPlayer then return end
         if p.Character then task.spawn(wireAnimator, p.Character, p) end
-        p.CharacterAdded:Connect(function(c) task.spawn(wireAnimator, c, p) end)
+        table.insert(_G.GakuranHubConnections, p.CharacterAdded:Connect(function(c) task.spawn(wireAnimator, c, p) end))
     end
     for _, p in ipairs(Players:GetPlayers()) do watch(p) end
-    Players.PlayerAdded:Connect(watch)
+    table.insert(_G.GakuranHubConnections, Players.PlayerAdded:Connect(watch))
 end)
 
--- // CONTINUOUS CHASE //
+-- // CONTINUOUS CHASE (BLINK STRIKE) //
 task.spawn(function()
-    while true do
+    while _G.GakuranHubLoopId == currentLoopId do
         task.wait(0.05)
         if AutoAttackEnabled and (STATE == "CHASE" or STATE == "ATTACK" or STATE == "PUNISH" or STATE == "GUARD_BREAK") then
             local char = LocalPlayer.Character
-            if char and char:FindFirstChild("Humanoid") and lockedTarget and lockedTarget:FindFirstChild("HumanoidRootPart") then
-                local dist = (lockedTarget.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") and lockedTarget and lockedTarget:FindFirstChild("HumanoidRootPart") then
+                local myPos = char.HumanoidRootPart.Position
+                local targetPos = lockedTarget.HumanoidRootPart.Position
+                local dist = (targetPos - myPos).Magnitude
+                
                 if dist > 3 then
-                    char.Humanoid:MoveTo(lockedTarget.HumanoidRootPart.Position)
+                    -- Just run straight to the target normally (no teleporting!)
+                    char.Humanoid:MoveTo(targetPos)
                 end
+                
                 if dist > 15 then
                     local VirtualInputManager = game:GetService("VirtualInputManager")
                     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
                 end
             end
+        end
+    end
+end)
+
+-- // SPECTATOR LOGIC //
+table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function()
+    if _G.SpectatorEnabled and _G.SelectedTargetName then
+        local p = Players:FindFirstChild(_G.SelectedTargetName)
+        if p and p.Character and p.Character:FindFirstChild("Humanoid") then
+            workspace.CurrentCamera.CameraSubject = p.Character.Humanoid
+        end
+    end
+end))
+
+-- // ANTI-STUN LOGIC //
+task.spawn(function()
+    while _G.GakuranHubLoopId == currentLoopId do
+        task.wait(0.1)
+        if _G.AntiStunEnabled and LocalPlayer.Character then
+            local char = LocalPlayer.Character
+            if char:GetAttribute("Stunned") then char:SetAttribute("Stunned", false) end
+            if char:GetAttribute("Grabbed") then char:SetAttribute("Grabbed", false) end
+            
+            local hum = char:FindFirstChild("Humanoid")
+            if hum and hum.WalkSpeed < 16 and not char:GetAttribute("Blocking") then
+                hum.WalkSpeed = 16
+            end
+        end
+    end
+end)
+
+
+
+-- // ESP LOGIC //
+_G.EspObjects = _G.EspObjects or {}
+
+table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function()
+    local camera = workspace.CurrentCamera
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            if not _G.EspObjects[p] then
+                _G.EspObjects[p] = {
+                    Box = Drawing.new("Square"),
+                    HpBg = Drawing.new("Square"),
+                    HpBar = Drawing.new("Square"),
+                    StamBg = Drawing.new("Square"),
+                    StamBar = Drawing.new("Square"),
+                    Tracer = Drawing.new("Line"),
+                    HeadDot = Drawing.new("Circle"),
+                    Name = Drawing.new("Text"),
+                    Attr = Drawing.new("Text"),
+                    Highlight = Instance.new("Highlight")
+                }
+                local o = _G.EspObjects[p]
+                o.Box.Thickness = 1 o.Box.Filled = false o.Box.Color = Color3.new(1,1,1)
+                o.HpBg.Filled = true o.HpBg.Color = Color3.new(0,0,0) o.HpBg.Thickness = 0
+                o.HpBar.Filled = true o.HpBar.Thickness = 0
+                o.StamBg.Filled = true o.StamBg.Color = Color3.new(0,0,0) o.StamBg.Thickness = 0
+                o.StamBar.Filled = true o.StamBar.Color = Color3.fromRGB(255, 215, 0) o.StamBar.Thickness = 0
+                o.Tracer.Thickness = 1 o.Tracer.Color = Color3.new(1,1,1)
+                o.HeadDot.Filled = true o.HeadDot.Radius = 3 o.HeadDot.Color = Color3.fromRGB(255, 50, 50)
+                o.Name.Center = true o.Name.Outline = true o.Name.Size = 13 o.Name.Color = Color3.new(1,1,1)
+                o.Attr.Center = true o.Attr.Outline = true o.Attr.Size = 11 o.Attr.Color = Color3.fromRGB(200, 200, 200)
+                
+                o.Highlight.FillTransparency = 0.5 o.Highlight.OutlineTransparency = 0 o.Highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                pcall(function() o.Highlight.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+            end
+            
+            local esp = _G.EspObjects[p]
+            local char = p.Character
+            local isAlive = char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0
+            
+            if _G.ESP.Master and isAlive then
+                local hrp = char.HumanoidRootPart
+                local head = char:FindFirstChild("Head")
+                local pos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                
+                if onScreen then
+                    local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos
+                    local legPos = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 2
+                    
+                    local boxX = pos.X - width/2
+                    local boxY = headPos.Y
+                    
+                    -- Boxes
+                    esp.Box.Size = Vector2.new(width, height)
+                    esp.Box.Position = Vector2.new(boxX, boxY)
+                    esp.Box.Visible = _G.ESP.Boxes
+                    
+                    -- Health Bar (Green -> Red)
+                    local healthPct = char.Humanoid.Health / char.Humanoid.MaxHealth
+                    local hpColor = Color3.fromRGB(255 - (healthPct * 255), healthPct * 255, 0)
+                    esp.HpBg.Size = Vector2.new(4, height + 2)
+                    esp.HpBg.Position = Vector2.new(boxX - 6, boxY - 1)
+                    esp.HpBg.Visible = _G.ESP.HealthBar
+                    
+                    esp.HpBar.Size = Vector2.new(2, height * healthPct)
+                    esp.HpBar.Position = Vector2.new(boxX - 5, boxY + height - (height * healthPct))
+                    esp.HpBar.Color = hpColor
+                    esp.HpBar.Visible = _G.ESP.HealthBar
+                    
+                    -- Stamina Bar
+                    local maxStam = char:GetAttribute("MaxStamina") or 100
+                    local curStam = char:GetAttribute("Stamina") or maxStam
+                    local stamPct = math.clamp(curStam / maxStam, 0, 1)
+                    
+                    esp.StamBg.Size = Vector2.new(4, height + 2)
+                    esp.StamBg.Position = Vector2.new(boxX + width + 2, boxY - 1)
+                    esp.StamBg.Visible = _G.ESP.StaminaBar
+                    
+                    esp.StamBar.Size = Vector2.new(2, height * stamPct)
+                    esp.StamBar.Position = Vector2.new(boxX + width + 3, boxY + height - (height * stamPct))
+                    esp.StamBar.Visible = _G.ESP.StaminaBar
+                    
+                    -- Tracers
+                    esp.Tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                    esp.Tracer.To = Vector2.new(pos.X, legPos.Y)
+                    esp.Tracer.Visible = _G.ESP.Tracers
+                    
+                    -- Highlight
+                    esp.Highlight.Adornee = _G.ESP.Highlight and char or nil
+                    
+                    -- Head Dot
+                    esp.HeadDot.Position = Vector2.new(headPos.X, headPos.Y)
+                    esp.HeadDot.Visible = _G.ESP.HeadDot
+                    
+                    -- Names
+                    esp.Name.Text = p.DisplayName
+                    esp.Name.Position = Vector2.new(pos.X, boxY - 18)
+                    esp.Name.Visible = _G.ESP.Names
+                    
+                    -- Attributes
+                    local attrs = {}
+                    
+                    local style = char:GetAttribute("CombatStyle")
+                    if type(style) == "string" and style ~= "" then
+                        table.insert(attrs, "["..string.upper(style).."]")
+                    end
+                    
+                    if char:GetAttribute("Blocking") then table.insert(attrs, "[BLOCK]") end
+                    if char:GetAttribute("Stunned") then table.insert(attrs, "[STUNNED]") end
+                    if char:GetAttribute("Knocked") or char:GetAttribute("Downed") then table.insert(attrs, "[KNOCKED]") end
+                    if char:GetAttribute("M1ing") or char:GetAttribute("Attacking") then table.insert(attrs, "[ATTK]") end
+                    
+                    esp.Attr.Text = table.concat(attrs, " ")
+                    esp.Attr.Position = Vector2.new(pos.X, boxY + height + 2)
+                    esp.Attr.Visible = _G.ESP.Attributes and #attrs > 0
+                else
+                    esp.Box.Visible = false
+                    esp.HpBg.Visible = false
+                    esp.HpBar.Visible = false
+                    esp.StamBg.Visible = false
+                    esp.StamBar.Visible = false
+                    esp.Tracer.Visible = false
+                    esp.HeadDot.Visible = false
+                    esp.Name.Visible = false
+                    esp.Attr.Visible = false
+                    esp.Highlight.Adornee = nil
+                end
+            else
+                if esp then
+                    esp.Box.Visible = false
+                    esp.HpBg.Visible = false
+                    esp.HpBar.Visible = false
+                    esp.StamBg.Visible = false
+                    esp.StamBar.Visible = false
+                    esp.Tracer.Visible = false
+                    esp.HeadDot.Visible = false
+                    esp.Name.Visible = false
+                    esp.Attr.Visible = false
+                    esp.Highlight.Adornee = nil
+                end
+            end
+        end
+    end
+end))
+
+table.insert(_G.GakuranHubConnections, Players.PlayerRemoving:Connect(function(p)
+    if _G.EspObjects[p] then
+        _G.EspObjects[p].Box:Remove()
+        _G.EspObjects[p].HpBg:Remove()
+        _G.EspObjects[p].HpBar:Remove()
+        _G.EspObjects[p].StamBg:Remove()
+        _G.EspObjects[p].StamBar:Remove()
+        _G.EspObjects[p].Tracer:Remove()
+        _G.EspObjects[p].HeadDot:Remove()
+        _G.EspObjects[p].Name:Remove()
+        _G.EspObjects[p].Attr:Remove()
+        if _G.EspObjects[p].Highlight then _G.EspObjects[p].Highlight:Destroy() end
+        _G.EspObjects[p] = nil
+    end
+end))
+
+-- // AUTO FINISH / CARRY LOGIC //
+local function isCarried(targetChar)
+    if not targetChar then return false end
+    if targetChar:GetAttribute("Carried") or targetChar:GetAttribute("Grabbed") or targetChar:GetAttribute("BeingCarried") then return true end
+    
+    local hrp = targetChar:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        for _, v in ipairs(hrp:GetConnectedParts()) do
+            if v.Parent and v.Parent ~= targetChar and v.Parent:FindFirstChild("Humanoid") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function isLocalPlayerBusy()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    if char:GetAttribute("Carrying") or char:GetAttribute("Executing") or char:GetAttribute("Grabbed") then return true end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        for _, v in ipairs(hrp:GetConnectedParts()) do
+            if v.Parent and v.Parent ~= char and v.Parent:FindFirstChild("Humanoid") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+task.spawn(function()
+    _G.LastFinishActionTime = _G.LastFinishActionTime or 0
+    while _G.GakuranHubLoopId == currentLoopId do
+        task.wait(0.05) -- เช็คเร็วมาก
+        if (_G.AutoExecuteEnabled or _G.AutoCarryEnabled) and LocalPlayer.Character and (os.clock() - _G.LastFinishActionTime > 1.0) then
+            if not isLocalPlayerBusy() then
+                local targetPlayer = nil
+                local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if not hrp then continue end
+                
+            if _G.FinishTargetMode == "Selected Target" and _G.SelectedTargetName then
+                targetPlayer = Players:FindFirstChild(_G.SelectedTargetName)
+                if targetPlayer and targetPlayer.Character and isCarried(targetPlayer.Character) then
+                    targetPlayer = nil -- ข้ามถ้าโดนแบกอยู่
+                end
+            else
+                if _G.LockedExecuteTarget and _G.LockedExecuteTarget:FindFirstChild("HumanoidRootPart") and 
+                   (_G.LockedExecuteTarget:GetAttribute("Knocked") or _G.LockedExecuteTarget:GetAttribute("Downed")) and
+                   not isCarried(_G.LockedExecuteTarget) then
+                    local d = (_G.LockedExecuteTarget.HumanoidRootPart.Position - hrp.Position).Magnitude
+                    if d < 40 then
+                        targetPlayer = game.Players:GetPlayerFromCharacter(_G.LockedExecuteTarget)
+                    end
+                end
+                
+                if not targetPlayer then
+                    local best, bestDist = nil, 30
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        if p ~= LocalPlayer and p.Character and (p.Character:GetAttribute("Knocked") or p.Character:GetAttribute("Downed")) then
+                            if not isCarried(p.Character) then
+                                local root = p.Character:FindFirstChild("HumanoidRootPart")
+                                if root then
+                                    local d = (root.Position - hrp.Position).Magnitude
+                                    if d < bestDist then
+                                        bestDist = d
+                                        best = p
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    targetPlayer = best
+                    if best then _G.LockedExecuteTarget = best.Character end
+                end
+            end
+            
+            if targetPlayer and targetPlayer.Character then
+                local targetChar = targetPlayer.Character
+                if targetChar:GetAttribute("Knocked") or targetChar:GetAttribute("Downed") then
+                    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+                    if hrp and targetHrp then
+                        _G.IsExecuting = true
+                        
+                        -- วาร์ปไปยืนบนศพ (ให้อยู่ในแนวตั้งตรง)
+                        LocalPlayer.Character:PivotTo(CFrame.new(targetHrp.Position + Vector3.new(0, 3, 0)))
+                        hrp.Velocity = Vector3.new(0, 0, 0)
+                        hrp.Anchored = true -- ล็อคตัวให้อยู่นิ่งๆ ไม่ให้ล้มกลิ้ง
+                        
+                        -- กดปุ่ม V หรือ B เพื่อจับ/ซ้ำ
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        if _G.AutoExecuteEnabled then
+                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.B, false, game)
+                            task.wait(0.02)
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.B, false, game)
+                        elseif _G.AutoCarryEnabled then
+                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.V, false, game)
+                            task.wait(0.02)
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.V, false, game)
+                        end
+                        
+                        local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+                        if remotes and remotes:FindFirstChild("Server") then
+                            if _G.AutoExecuteEnabled then
+                                pcall(function() remotes.Server:FireServer({Type = "KnockedGripRequest", Target = targetPlayer}) end)
+                            elseif _G.AutoCarryEnabled then
+                                pcall(function() remotes.Server:FireServer({Type = "KnockedCarryRequest", Target = targetPlayer}) end)
+                            end
+                        end
+                        
+                        -- แยกระยะเวลาแช่แข็งตัวละคร
+                        -- ถ้าเป็น Execute ต้องรอนานหน่อยให้แอนิเมชันซ้ำจบ (ประมาณ 3 วิ)
+                        -- ถ้าเป็น Carry อุ้มเสร็จแล้วปลดเลย (0.2 วิ)
+                        if _G.AutoExecuteEnabled then
+                            task.wait(3)
+                        else
+                            task.wait(0.2)
+                        end
+                        
+                        if hrp then hrp.Anchored = false end
+                        
+                        -- Set Cooldown แยกกัน
+                        if _G.AutoExecuteEnabled then
+                            _G.LastFinishActionTime = os.clock() + 2 -- เพิ่มคูลดาวน์กันวาร์ปไปตัวอื่น
+                        else
+                            _G.LastFinishActionTime = os.clock()
+                        end
+                        
+                        _G.IsExecuting = false
+                    end
+                end
+            end
+            end -- ปิดเงื่อนไข isLocalPlayerBusy
+        end
+    end
+end)
+
+-- // AUTO SAVE LOGIC (Replaces Auto Flee) //
+task.spawn(function()
+    local isFleeing = false
+    local savedCFrame = nil
+    while _G.GakuranHubLoopId == currentLoopId do
+        task.wait(0.2)
+        if _G.AutoFleeEnabled and LocalPlayer.Character then
+            local char = LocalPlayer.Character
+            local hum = char:FindFirstChild("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hum and hrp and hum.Health > 0 and char:GetAttribute("Downed") ~= true then
+                local healthPct = hum.Health / hum.MaxHealth
+                if healthPct < 0.4 and not isFleeing then
+                    isFleeing = true
+                    savedCFrame = hrp.CFrame -- Save current position
+                    
+                    -- เปลี่ยนจากวาร์ปขึ้น 100,000 เป็นแค่บินขึ้นไป 150 studs ให้พ้นระยะการโจมตีพอครับ
+                    char:PivotTo(CFrame.new(hrp.Position.X, hrp.Position.Y + 150, hrp.Position.Z))
+                    hrp.Velocity = Vector3.new(0,0,0)
+                    
+                    -- Anchor all parts to freeze safely in the sky
+                    for _, v in ipairs(char:GetDescendants()) do
+                        if v:IsA("BasePart") then v.Anchored = true end
+                    end
+                    
+                elseif isFleeing and healthPct >= 0.95 then
+                    isFleeing = false
+                    
+                    -- Unanchor first
+                    for _, v in ipairs(char:GetDescendants()) do
+                        if v:IsA("BasePart") then v.Anchored = false end
+                    end
+                    
+                    -- Teleport back to where we were fighting
+                    if savedCFrame then
+                        char:PivotTo(savedCFrame)
+                        savedCFrame = nil
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- // AUTO REVIVE LOGIC //
+task.spawn(function()
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+    local camera = workspace.CurrentCamera
+    while _G.GakuranHubLoopId == currentLoopId do
+        task.wait(0.1)
+        if _G.AutoReviveEnabled and LocalPlayer.Character then
+            local char = LocalPlayer.Character
+            local hum = char:FindFirstChild("Humanoid")
+            
+            pcall(function()
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                if not playerGui then return end
+                
+                local isDead = (hum and hum.Health <= 0) or char:GetAttribute("Knocked") == true or char:GetAttribute("Downed") == true
+                
+                if isDead then
+                    -- สับรัว 10 ครั้งต่อวินาทีไปเลยครับ จะได้ตื่นชัวร์ๆ (0.1 วิ ต่อ 1 คลิก)
+                    if not _G.lastHeartClickTime or os.clock() - _G.lastHeartClickTime >= 0.1 then
+                        _G.lastHeartClickTime = os.clock()
+                        
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        -- เปลี่ยนตำแหน่งคลิกไปที่มุมซ้ายบนสุดของจอ (X=10, Y=50) 
+                        -- เพื่อป้องกันไม่ให้เมาส์ไปโดน UI ตรงกลางหน้าจอ หรือปุ่มต่างๆ
+                        local cx = 10
+                        local cy = 50
+                        
+                        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+                        task.wait(0.02)
+                        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+                    end
+                end
+            end)
         end
     end
 end)
