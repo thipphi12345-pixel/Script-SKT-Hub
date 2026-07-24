@@ -1377,26 +1377,7 @@ Tab_ServerHop:CreateButton({Name = "🌐 Hop to Different Server", Callback = fu
     end)
 end})
 
-local Tab_Emote = Window:CreateTab("🕺 Emotes")
-Tab_Emote:CreateSection("Play Game Emotes")
 
-local function playEmote(emoteName)
-    pcall(function()
-        local TextChatService = game:GetService("TextChatService")
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            TextChatService.TextChannels.RBXGeneral:SendAsync("/e " .. emoteName)
-        else
-            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer("/e " .. emoteName, "All")
-        end
-    end)
-end
-
-local emotes = {"dance", "dance2", "dance3", "cheer", "laugh", "point", "wave", "sit"}
-for _, name in ipairs(emotes) do
-    Tab_Emote:CreateButton({Name = "Play: " .. name, Callback = function()
-        playEmote(name)
-    end})
-end
 
 local Tab_Settings = Window:CreateTab("⚙️ Hub Settings")
 Tab_Settings:CreateSection("UI Settings")
@@ -1886,8 +1867,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                 char:SetAttribute("Running", false)
                 char:SetAttribute("Sprinting", false)
             end)
-            local VirtualInputManager = game:GetService("VirtualInputManager")
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
         end
         return
     end
@@ -1988,8 +1967,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                 _G.FlyBodyGyro.CFrame = camera.CFrame
             end
         end
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
         return
     end
     
@@ -2021,8 +1998,9 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     if e_attacking then
         enemyLastAttacked[target] = now
-        -- If it's a new punch in the combo, OR if it's the first punch
-        if not prev_attacking or not enemyAttackStart[target] then
+        -- Allow wireAnimator to handle combo timings if possible, 
+        -- but if this is the very first strike, log it.
+        if not prev_attacking and not enemyAttackStart[target] then
             enemyAttackStart[target] = now
             enemySkipped[target] = nil
         end
@@ -2110,25 +2088,35 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             if isBlockingNow and now > parryEndTime then releaseBlock() end
             StateL.Text = "Status: ⏳ WAIT RESET"
         else
-            -- SINGLE PARRY LOGIC
-            local idealTime = hitboxDelay - 0.125 -- Changed from 0.20 to exactly 0.125s (the perfect parry window)
+            -- SMART PARRY LOGIC (Ping Compensated, Distance Calculated & Multi-Hit Combo Support)
+            local pingStr = "0"
+            pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
+            local ping = (tonumber(pingStr) or 50) / 1000
+            
+            -- การชดเชยระยะทาง (Distance Compensation): 
+            -- ถ้ายิ่งอยู่ใกล้ (dist ต่ำ) หมัดจะถึงตัวเร็วขึ้นมาก เราจึงต้อง Parry ให้ไวขึ้น (ลบเวลาออกสูงสุด 0.08 วิ)
+            local distFactor = math.clamp(dist, 0, 15)
+            local distComp = ((15 - distFactor) / 15) * 0.08
+            
+            -- Adjust window based on ping and distance. 
+            local idealTime = math.max(0.01, hitboxDelay - 0.13 - (ping * 0.5) - distComp)
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
                 StateL.Text = string.format("Status: ⏱️ TIMING (%.2fs)", idealTime - elapsed)
                 
-            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.10) then
-                -- Window for the first hit
+            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
+                -- Block! (Holding block through the impact window)
                 STATE = "PARRY"
                 if not isBlockingNow then doBlock() end
-                parryEndTime = now + 0.20
+                parryEndTime = now + 0.25
                 StateL.Text = "Status: ⚡ M1 PARRY"
                 
             else
-                -- We only parry once per attack string! 
-                -- If we successfully parry, the enemy is usually stunned anyway.
-                enemySkipped[target] = true
+                -- If we missed or successfully parried, we reset but DO NOT skip the next hits of the combo!
+                -- Setting enemyAttackStart to nil allows wireAnimator to register the next punch!
+                enemyAttackStart[target] = nil 
                 stats.skips = stats.skips + 1
                 STATE = "WAIT_RESET"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
@@ -2172,8 +2160,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             char:SetAttribute("Sprinting", true)
             hum.WalkSpeed = 24
         end)
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
         
         hum:MoveTo(targetRoot.Position)
         
@@ -2201,8 +2187,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         StateL.Text = "Status: 👁️ WATCHING"
         TargetL.Text = string.format("Target: %s [%s] [%.0fst]", target.Name, string.upper(target:GetAttribute("CombatStyle") or "DEFAULT"), dist)
         ActionL.Text = "In range, waiting for opening..."
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end
     
     local th = target:FindFirstChildOfClass("Humanoid")
