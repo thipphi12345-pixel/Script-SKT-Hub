@@ -936,19 +936,54 @@ local chunks = {
 }
 local encoded = table.concat(chunks)
 
-local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local decoded = string.gsub(encoded, '[^'..b..'=]', '')
-decoded = (decoded:gsub('.', function(x)
-    if (x == '=') then return '' end
-    local r,f='',(b:find(x)-1)
-    for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-    return r;
-end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-    if (#x ~= 8) then return '' end
-    local c=0
-    for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
-    return string.char(c)
-end))
+local function decodeBase64(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    local decoder = {}
+    for i = 1, 64 do decoder[string.sub(b, i, i)] = i - 1 end
+
+    data = string.gsub(data, '[^'..b..'=]', '')
+    local padding = string.match(data, '=+$')
+    local p = padding and #padding or 0
+    data = string.gsub(data, '=', '')
+
+    local res = {}
+    local length = #data
+    local char = string.char
+    local floor = math.floor
+
+    for i = 1, length, 4 do
+        local c1 = decoder[string.sub(data, i, i)] or 0
+        local c2 = decoder[string.sub(data, i+1, i+1)] or 0
+        local c3 = decoder[string.sub(data, i+2, i+2)] or 0
+        local c4 = decoder[string.sub(data, i+3, i+3)] or 0
+
+        local num = c1 * 262144 + c2 * 4096 + c3 * 64 + c4
+
+        local b1 = floor(num / 65536) % 256
+        local b2 = floor(num / 256) % 256
+        local b3 = num % 256
+
+        res[#res + 1] = char(b1)
+        res[#res + 1] = char(b2)
+        res[#res + 1] = char(b3)
+    end
+
+    if p > 0 then
+        for _ = 1, p do table.remove(res) end
+    end
+    return table.concat(res)
+end
+
+local success, decoded = pcall(function() 
+    if base64_decode then return base64_decode(encoded) end
+    if crypt and crypt.base64decode then return crypt.base64decode(encoded) end
+    if crypt and crypt.base64 and crypt.base64.decode then return crypt.base64.decode(encoded) end
+    return decodeBase64(encoded) 
+end)
+
+if not success or not decoded then
+    decoded = decodeBase64(encoded)
+end
 
 local func, err = loadstring(decoded)
 if func then
