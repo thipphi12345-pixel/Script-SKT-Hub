@@ -1276,16 +1276,27 @@ end})
 local Tab_Survival = Window:CreateTab("🛡️ Ultimate Survival")
 Tab_Survival:CreateSection("Survival Tools")
 
-Tab_Survival:CreateToggle({Name = "🚫 Anti-Grab / Anti-Stun", CurrentValue = false, Flag = "AntiStun", Callback = function(Value)
-    _G.AntiStunEnabled = Value
+Tab_Survival:CreateToggle({Name = "🚑 Auto Revive (Respawn/Struggle)", CurrentValue = false, Flag = "AutoRevive", Callback = function(Value)
+    _G.AutoReviveEnabled = Value
 end})
 
-Tab_Survival:CreateToggle({Name = "🏃 Auto Save (Flee to Sky at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
+Tab_Survival:CreateSlider({
+    Name = "🏃 Custom Walk/Sprint Speed",
+    Range = {16, 150},
+    CurrentValue = 16,
+    Increment = 1,
+    Flag = "CustomSpeed",
+    Callback = function(Value)
+        _G.CustomWalkSpeed = Value
+    end
+})
+
+Tab_Survival:CreateToggle({Name = "🏃 Auto Save (Hide Underground at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
     _G.AutoFleeEnabled = Value
 end})
 
-Tab_Survival:CreateToggle({Name = "❤️ Auto Revive (Respawn/Struggle)", CurrentValue = false, Flag = "AutoRevive", Callback = function(Value)
-    _G.AutoReviveEnabled = Value
+Tab_Survival:CreateToggle({Name = "🚫 Anti-Grab / Anti-Stun", CurrentValue = false, Flag = "AntiStun", Callback = function(Value)
+    _G.AntiStunEnabled = Value
 end})
 
 
@@ -1377,7 +1388,12 @@ Tab_ServerHop:CreateButton({Name = "🌐 Hop to Different Server", Callback = fu
     end)
 end})
 
-
+local Tab_Parry = Window:CreateTab("🛡️ Assist Parry")
+Tab_Parry:CreateSection("Anti-Gank Parry (Manual Play)")
+Tab_Parry:CreateToggle({Name = "🛡️ Enable Assist Parry", CurrentValue = false, Flag = "AssistParry", Callback = function(Value)
+    _G.AssistParryEnabled = Value
+end})
+Tab_Parry:CreateLabel({Name = "Blocks automatically when any enemy attacks you. You can move freely!"})
 
 local Tab_Settings = Window:CreateTab("⚙️ Hub Settings")
 Tab_Settings:CreateSection("UI Settings")
@@ -1981,14 +1997,24 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     -- FACE TARGET LOGIC
     if _G.FaceTargetEnabled and not isDowned then
-        hum.AutoRotate = false -- Disable built-in rotation so it doesn't fight our CFrame update
+        hum.AutoRotate = false -- Disable built-in rotation
+        local bg = char.HumanoidRootPart:FindFirstChild("FaceTargetGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "FaceTargetGyro"
+            bg.MaxTorque = Vector3.new(0, 1000000, 0) -- Only rotate on Y axis (Left/Right)
+            bg.P = 500000 -- Insanely high power for INSTANT snapping
+            bg.D = 50 -- Low dampening to eliminate turn delay
+            bg.Parent = char.HumanoidRootPart
+        end
         local lookDir = (targetRoot.Position - myPos)
         if lookDir.Magnitude > 0 then
-            lookDir = lookDir.Unit
-            char.HumanoidRootPart.CFrame = CFrame.new(myPos, myPos + Vector3.new(lookDir.X, 0, lookDir.Z))
+            bg.CFrame = CFrame.new(myPos, myPos + Vector3.new(lookDir.X, 0, lookDir.Z))
         end
     else
         hum.AutoRotate = true
+        local bg = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart:FindFirstChild("FaceTargetGyro")
+        if bg then bg:Destroy() end
     end
     
     local e_attacking = enemyIsAttacking(target)
@@ -2057,21 +2083,8 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
         local isGuardBroken = char:GetAttribute("GuardBroken") == true
         
-        -- If it's a Heavy Attack (detected by color/highlight), always Dash Dodge!
-        if e_isHeavy and doDodge(target) then
-            STATE = "DODGE"
-            StateL.Text = "Status: 💨 DODGED HEAVY"
-            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
-            ActionL.Text = "Evaded heavy attack (Color detected)!"
-            parryEndTime = now + 0.5
-        -- If guard is broken, we must dodge!
-        elseif isGuardBroken and (enemyAttackStart[target] or e_skill) and doDodge(target) then
-            STATE = "DODGE"
-            StateL.Text = "Status: 💨 DODGED (GUARD BROKEN)"
-            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
-            ActionL.Text = "Guard broken, evading!"
-            parryEndTime = now + 0.5
-        elseif e_skill and skillElapsed < 1.2 then
+
+        if e_skill and skillElapsed < 1.2 then
             STATE = "PARRY"
             doBlock()
             parryEndTime = now + 0.5
@@ -2163,20 +2176,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
         hum:MoveTo(targetRoot.Position)
         
-        if dist > 25 and not (e_attacking or e_skill) and char:GetAttribute("EvasiveCooldown") ~= true then
-            task.spawn(function()
-                pcall(function()
-                    local vim = game:GetService("VirtualInputManager")
-                    vim:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-                    task.wait(0.02)
-                    vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                    task.wait(0.05)
-                    vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-                    vim:SendKeyEvent(false, Enum.KeyCode.W, false, game)
-                end)
-            end)
-        end
-        
         StateL.Text = "Status: 🏃 CHASING"
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = "Closing distance to target"
@@ -2207,12 +2206,14 @@ task.spawn(function()
         local anim = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 3)
         if not anim then return end
         
+        local _G_ParryDebounces = {} -- Track last parry trigger per enemy
         table.insert(_G.GakuranHubConnections, anim.AnimationPlayed:Connect(function(track)
-            if not AutoParryEnabled then return end
+            if not AutoParryEnabled and not _G.AssistParryEnabled then return end
             local n = string.lower(track.Name or "")
             local isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
                 or string.find(n,"attack") or string.find(n,"heavy") or string.find(n,"kick")
-                or string.find(n,"swing") or string.find(n,"slam")
+                or string.find(n,"swing") or string.find(n,"slam") or string.find(n,"dash")
+                or string.find(n,"strike") or string.find(n,"charge") or string.find(n,"rush")
             if isAtk then
                 local mc = LocalPlayer.Character
                 if mc and mc:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
@@ -2649,13 +2650,9 @@ task.spawn(function()
                 local isDead = (hum and hum.Health <= 0) or char:GetAttribute("Knocked") == true or char:GetAttribute("Downed") == true
                 
                 if isDead then
-                    -- สับรัว 10 ครั้งต่อวินาทีไปเลยครับ จะได้ตื่นชัวร์ๆ (0.1 วิ ต่อ 1 คลิก)
                     if not _G.lastHeartClickTime or os.clock() - _G.lastHeartClickTime >= 0.1 then
                         _G.lastHeartClickTime = os.clock()
                         
-                        local VirtualInputManager = game:GetService("VirtualInputManager")
-                        -- เปลี่ยนตำแหน่งคลิกไปที่มุมซ้ายบนสุดของจอ (X=10, Y=50) 
-                        -- เพื่อป้องกันไม่ให้เมาส์ไปโดน UI ตรงกลางหน้าจอ หรือปุ่มต่างๆ
                         local cx = 10
                         local cy = 50
                         
@@ -2666,6 +2663,33 @@ task.spawn(function()
                 end
             end)
         end
+    end
+end)
+
+-- // CUSTOM SPEED & ASSIST PARRY LOGIC //
+local assistPrevAttacking = {}
+local assistLastHP = nil
+local assistLastHitTime = 0
+-- Per-style adaptive learning: tracks timing offset AND miss count per style
+-- Format: {offset = number, misses = number}  
+-- offset shifts parry earlier, misses tracks consecutive failures
+local assistStyleLearn = {}
+
+task.spawn(function()
+    while _G.GakuranHubLoopId == currentLoopId do
+        task.wait()
+        
+        -- Custom Walk Speed
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            if _G.CustomWalkSpeed and _G.CustomWalkSpeed > 16 then
+                if not (AutoAttackEnabled and (STATE == "CHASE" or STATE == "ATTACK" or STATE == "PUNISH")) then
+                    char.Humanoid.WalkSpeed = _G.CustomWalkSpeed
+                end
+            end
+        end
+        
+
     end
 end)
 
