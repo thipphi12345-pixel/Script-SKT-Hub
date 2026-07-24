@@ -1388,12 +1388,7 @@ Tab_ServerHop:CreateButton({Name = "🌐 Hop to Different Server", Callback = fu
     end)
 end})
 
-local Tab_Parry = Window:CreateTab("🛡️ Assist Parry")
-Tab_Parry:CreateSection("Anti-Gank Parry (Manual Play)")
-Tab_Parry:CreateToggle({Name = "🛡️ Enable Assist Parry", CurrentValue = false, Flag = "AssistParry", Callback = function(Value)
-    _G.AssistParryEnabled = Value
-end})
-Tab_Parry:CreateLabel({Name = "Blocks automatically when any enemy attacks you. You can move freely!"})
+
 
 local Tab_Settings = Window:CreateTab("⚙️ Hub Settings")
 Tab_Settings:CreateSection("UI Settings")
