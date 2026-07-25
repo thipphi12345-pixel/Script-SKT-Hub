@@ -1476,9 +1476,20 @@ Tab_Visuals:CreateToggle({Name = "Attributes", CurrentValue = false, Flag = "ESP
 local Tab_ParrySettings = Window:CreateTab("️ Precision Parry")
 Tab_ParrySettings:CreateSection("Adjust Parry Delay Per Style")
 
+Tab_ParrySettings:CreateSlider({
+    Name = "Parry Distance (Recommend: 9)",
+    Range = {5, 20},
+    Increment = 1,
+    CurrentValue = _G.ParryRange or 9,
+    Flag = "Parry_Range_Settings",
+    Callback = function(Value)
+        _G.ParryRange = Value
+    end,
+})
+
 for styleName, data in pairs(STYLE_DATA) do
     Tab_ParrySettings:CreateSlider({
-        Name = string.upper(styleName) .. " M1 Delay",
+        Name = string.upper(styleName) .. string.format(" M1 DELAY (Recommend: %.2f)", data.m1),
         Range = {0, 1},
         Increment = 0.01,
         CurrentValue = data.m1,
@@ -2007,7 +2018,7 @@ end
 -- // PARRY & ATTACK RANGE //
 local M1_RANGE = 7 -- Expanded from 5 for Hitbox Expander
 local M2_RANGE = 7
-local PARRY_RANGE = 9 -- Reduced to 9 to ignore far away shadow-boxing
+_G.ParryRange = _G.ParryRange or 9
 local CHASE_RANGE = 500
 
 -- // MAIN BRAIN //
@@ -2141,20 +2152,14 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     local e_attacking = enemyIsAttacking(target)
     local prev_attacking = enemyPrevAttacking[target] or false
-    
-    local currentM1Count = target:GetAttribute("M1Count") or 0
-    local prevM1Count = enemyPrevM1Count[target] or 0
-    local comboHitTriggered = (currentM1Count ~= prevM1Count)
-    enemyPrevM1Count[target] = currentM1Count
-
     local temp_e_isHeavy = enemyIsHeavyAttacking(target)
     local temp_hitboxDelay = getHitboxDelay(target, temp_e_isHeavy)
     
-    if e_attacking or comboHitTriggered then
+    if e_attacking then
         enemyLastAttacked[target] = now
         -- Allow wireAnimator to handle combo timings if possible, 
-        -- but if this is the very first strike OR a combo hit, log it.
-        if (not prev_attacking or comboHitTriggered) and not enemyAttackStart[target] then
+        -- but if this is the very first strike, log it.
+        if not prev_attacking and not enemyAttackStart[target] then
             enemyAttackStart[target] = now
             enemySkipped[target] = nil
         end
@@ -2189,6 +2194,13 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     -- // COMBAT LOGIC //
     
+    local myLook = char.PrimaryPart and char.PrimaryPart.CFrame.LookVector
+    local dirToEnemy = char.PrimaryPart and target.PrimaryPart and (target.PrimaryPart.Position - char.PrimaryPart.Position).Unit
+    local dot = (myLook and dirToEnemy) and myLook:Dot(dirToEnemy) or 0
+    local shouldDodgeM1Behind = (enemyAttackStart[target] and not e_isHeavy and not e_skill and dot < -0.2 and dist <= (_G.ParryRange + 3) and target.PrimaryPart and target.PrimaryPart.Velocity.Magnitude < 35)
+    local shouldDodgeHeavy = (e_isHeavy and dist <= 20)
+    local willDodge = _G.AutoDashEnabled and (now - lastDashTime > 1.5) and (shouldDodgeM1Behind or shouldDodgeHeavy)
+
     -- PRIORITY 1: PUNISH (Stunned Enemy)
     if AutoAttackEnabled and e_stunned and dist <= M1_RANGE then
         STATE = "PUNISH"
@@ -2204,74 +2216,49 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         ActionL.Text = string.format("Combo Hit #%d", myComboCount)
         
     -- PRIORITY 1.5: AUTO DASH (EVASION)
-    elseif _G.AutoDashEnabled and target and target.PrimaryPart and char.PrimaryPart and (enemyAttackStart[target] or e_isHeavy) then
-        local myLook = char.PrimaryPart.CFrame.LookVector
-        local dirToEnemy = (target.PrimaryPart.Position - char.PrimaryPart.Position).Unit
-        local dot = myLook:Dot(dirToEnemy)
+    elseif willDodge then
+        lastDashTime = now
         
-        local dodged = false
-        
-        -- Dodge M1 from behind (Ignore if they are just dashing past us)
-        if not e_isHeavy and not e_skill and dot < -0.2 and dist <= (PARRY_RANGE + 3) then
-            if target.PrimaryPart.Velocity.Magnitude < 35 and (now - lastDashTime > 1.5) then
-                lastDashTime = now
-                dodged = true
-                
-                task.spawn(function()
-                    local VirtualInputManager = game:GetService("VirtualInputManager")
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-                    task.wait(0.01)
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                    task.wait(0.1)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-                end)
-                
-                ActionL.Text = "Dash Forward (M1 Behind)"
-                enemyAttackStart[target] = nil -- Reset state
+        if shouldDodgeM1Behind then
+            task.spawn(function()
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                task.wait(0.1)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+            end)
+            
+            ActionL.Text = "Dash Forward (M1 Behind)"
+            enemyAttackStart[target] = nil -- Reset state
+        elseif shouldDodgeHeavy then
+            local cross = myLook:Cross(dirToEnemy)
+            local dodgeKey = Enum.KeyCode.S
+            
+            if dot > 0.5 then
+                if cross.Y > 0 then dodgeKey = Enum.KeyCode.D
+                else dodgeKey = Enum.KeyCode.A end
             end
+            
+            task.spawn(function()
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                VirtualInputManager:SendKeyEvent(true, dodgeKey, false, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                task.wait(0.1)
+                VirtualInputManager:SendKeyEvent(false, dodgeKey, false, game)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+            end)
+            ActionL.Text = "Dash " .. dodgeKey.Name .. " (Heavy)"
         end
         
-        -- Dodge Heavy Attack (Guard Break)
-        if e_isHeavy and dist <= 20 and not dodged then
-            if now - lastDashTime > 1.5 then
-                lastDashTime = now
-                dodged = true
-                
-                local cross = myLook:Cross(dirToEnemy)
-                local dodgeKey = Enum.KeyCode.S
-                
-                -- If they are directly in front, step aside!
-                if dot > 0.5 then
-                    if cross.Y > 0 then
-                        dodgeKey = Enum.KeyCode.D
-                    else
-                        dodgeKey = Enum.KeyCode.A
-                    end
-                end
-                
-                task.spawn(function()
-                    local VirtualInputManager = game:GetService("VirtualInputManager")
-                    VirtualInputManager:SendKeyEvent(true, dodgeKey, false, game)
-                    task.wait(0.01)
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                    task.wait(0.1)
-                    VirtualInputManager:SendKeyEvent(false, dodgeKey, false, game)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-                end)
-                
-                ActionL.Text = "Dash " .. dodgeKey.Name .. " (Heavy)"
-            end
-        end
-        
-        if dodged then
-            STATE = "IDLE"
-            if isBlockingNow then releaseBlock() end
-            return
-        end
+        STATE = "IDLE"
+        if isBlockingNow then releaseBlock() end
+        return
 
     -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
-    elseif AutoParryEnabled and (enemyAttackStart[target] and dist <= PARRY_RANGE) then
+    elseif AutoParryEnabled and (enemyAttackStart[target] and dist <= _G.ParryRange) then
         
         -- Stop attacking to ensure we can defend
         if weAreAttacking() then forceStopAttack() end
@@ -2290,13 +2277,8 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
             local ping = (tonumber(pingStr) or 50) / 1000
             
-            -- การชดเชยระยะทาง (Distance Compensation): 
-            -- ถ้ายิ่งอยู่ใกล้ (dist ต่ำ) หมัดจะถึงตัวเร็วขึ้นมาก เราจึงต้อง Parry ให้ไวขึ้น (ลบเวลาออกสูงสุด 0.08 วิ)
-            local distFactor = math.clamp(dist, 0, 15)
-            local distComp = ((15 - distFactor) / 15) * 0.08
-            
-            -- Adjust window based on ping and distance. 
-            local idealTime = math.max(0.01, hitboxDelay - 0.13 - (ping * 0.5) - distComp)
+            -- Adjust window based on ping
+            local idealTime = math.max(0.01, hitboxDelay - 0.15 - (ping * 0.5))
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
