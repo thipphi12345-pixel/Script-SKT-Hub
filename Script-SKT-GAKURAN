@@ -1370,6 +1370,11 @@ local Toggle_AutoAttack = Tab_Main:CreateToggle({Name = "️ Auto Attack (Combo/
 end})
 
 
+_G.NoParryCooldown = false
+Tab_Main:CreateToggle({Name = " No Parry Cooldown", CurrentValue = false, Flag = "NoParryCooldown", Callback = function(Value)
+    _G.NoParryCooldown = Value
+end})
+
 _G.FaceTargetEnabled = true
 Tab_Main:CreateToggle({Name = "️ Face Target (Auto Aim)", CurrentValue = true, Flag = "FaceTarget", Callback = function(Value)
     _G.FaceTargetEnabled = Value
@@ -1473,13 +1478,46 @@ local Tab_ParrySettings = Window:CreateTab("️ Precision Parry")
 Tab_ParrySettings:CreateSection("Adjust Parry Delay Per Style")
 
 Tab_ParrySettings:CreateSlider({
-    Name = "Parry Distance (Recommend: 9)",
+    Name = "M1 Parry Distance (Recommend: 12)",
     Range = {5, 20},
     Increment = 1,
-    CurrentValue = _G.ParryRange or 9,
+    CurrentValue = _G.ParryRange or 12,
     Flag = "Parry_Range_Settings",
     Callback = function(Value)
         _G.ParryRange = Value
+    end,
+})
+
+Tab_ParrySettings:CreateSlider({
+    Name = "Heavy Parry Distance (Recommend: 20)",
+    Range = {10, 30},
+    Increment = 1,
+    CurrentValue = _G.HeavyParryRange or 20,
+    Flag = "Heavy_Parry_Range_Settings",
+    Callback = function(Value)
+        _G.HeavyParryRange = Value
+    end,
+})
+
+Tab_ParrySettings:CreateSlider({
+    Name = "Heavy Attack (R) Extra Delay",
+    Range = {0, 0.5},
+    Increment = 0.01,
+    CurrentValue = _G.HeavyDelayOffset or 0.2,
+    Flag = "Heavy_Delay_Settings",
+    Callback = function(Value)
+        _G.HeavyDelayOffset = Value
+    end,
+})
+
+Tab_ParrySettings:CreateSlider({
+    Name = "God Mode (Parry Timing Offset)",
+    Range = {-0.3, 0.3},
+    Increment = 0.01,
+    CurrentValue = _G.ParryTimingOffset or 0,
+    Flag = "Parry_Timing_Offset",
+    Callback = function(Value)
+        _G.ParryTimingOffset = Value
     end,
 })
 
@@ -1744,7 +1782,11 @@ end
 
 local function getHitboxDelay(enemy, isM2)
     local d = getStyleData(enemy)
-    return isM2 and d.m2 or d.m1
+    if isM2 then
+        -- Add delay specifically for Heavy attacks (R)
+        return d.m2 + (_G.HeavyDelayOffset or 0.2)
+    end
+    return d.m1
 end
 
 local function canBlock()
@@ -1776,20 +1818,44 @@ local function enemyIsStunned(enemy)
 end
 
 local function enemyIsUsingSkill(enemy)
+    -- Explicitly ignore dashing
+    if enemy:GetAttribute("Dashing") == true or enemy:GetAttribute("Dash") == true or enemy:GetAttribute("Rolling") == true then
+        return false
+    end
+    
     local cant = enemy:GetAttribute("CantAnything")==true
     local isDashing = false
     local hrp = enemy:FindFirstChild("HumanoidRootPart")
     if hrp and hrp.Velocity.Magnitude > 35 then
         isDashing = true
     end
-    return cant and not enemyIsAttacking(enemy) and not enemyIsStunned(enemy) and not isDashing
+    if isDashing then return false end
+    
+    -- Check actual skill attributes
+    if enemy:GetAttribute("Skill1") == true or enemy:GetAttribute("Skill2") == true 
+        or enemy:GetAttribute("Skill3") == true or enemy:GetAttribute("Skill4") == true
+        or enemy:GetAttribute("Ultimate") == true or enemy:GetAttribute("Ult") == true
+        or enemy:GetAttribute("Awakening") == true or enemy:GetAttribute("UsingSkill") == true then
+        return true
+    end
+    
+    -- Fallback: If they can't do anything, aren't attacking, aren't stunned, and aren't dashing.
+    -- (This fallback might trigger on other actions, so we rely more on the explicit checks above)
+    return cant and not enemyIsAttacking(enemy) and not enemyIsStunned(enemy)
 end
 
 local function enemyIsHeavyAttacking(enemy)
     if enemy:GetAttribute("M2") == true or enemy:GetAttribute("Heavy") == true then return true end
     
+    local function isRedHighlight(highlight)
+        if highlight.Name == "TalkHighlight" or highlight.Name == "Hover_Highlight" then return false end
+        local fc = highlight.FillColor
+        local oc = highlight.OutlineColor
+        return (fc.R > 0.5 and fc.G < 0.3 and fc.B < 0.3) or (oc.R > 0.5 and oc.G < 0.3 and oc.B < 0.3)
+    end
+    
     for _, child in ipairs(enemy:GetChildren()) do
-        if child:IsA("Highlight") and child.Name ~= "TalkHighlight" and child.Name ~= "Hover_Highlight" then 
+        if child:IsA("Highlight") and isRedHighlight(child) then 
             return true 
         end
     end
@@ -1797,7 +1863,7 @@ local function enemyIsHeavyAttacking(enemy)
     local model = enemy:FindFirstChild("Model")
     if model then
         for _, child in ipairs(model:GetChildren()) do
-            if child:IsA("Highlight") and child.Name ~= "TalkHighlight" and child.Name ~= "Hover_Highlight" then 
+            if child:IsA("Highlight") and isRedHighlight(child) then 
                 return true 
             end
         end
@@ -1829,6 +1895,14 @@ end
 local function doBlock()
     if not BlockModule or type(BlockModule.Block)~="function" then return false end
     if isBlockingNow then return true end
+    
+    local c = LocalPlayer.Character
+    if c and c:GetAttribute("Equip") ~= true then
+        if EquipModule and type(EquipModule.Equip) == "function" then
+            pcall(function() EquipModule.Equip() end)
+        end
+    end
+    
     if not canBlock() then return false end
     local now = os.clock()
     if now - lastBlockTime < 0.06 then return false end
@@ -2014,7 +2088,7 @@ end
 -- // PARRY & ATTACK RANGE //
 local M1_RANGE = 7 -- Expanded from 5 for Hitbox Expander
 local M2_RANGE = 7
-_G.ParryRange = _G.ParryRange or 9
+_G.ParryRange = _G.ParryRange or 12
 local CHASE_RANGE = 500
 
 -- // MAIN BRAIN //
@@ -2209,7 +2283,7 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
 
     -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
-    elseif AutoParryEnabled and (enemyAttackStart[target] and dist <= _G.ParryRange) then
+    elseif AutoParryEnabled and enemyAttackStart[target] and dist <= (e_isHeavy and (_G.HeavyParryRange or 20) or (_G.ParryRange or 12)) then
         
         -- Stop attacking to ensure we can defend
         if weAreAttacking() then forceStopAttack() end
@@ -2228,8 +2302,10 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
             local ping = (tonumber(pingStr) or 50) / 1000
             
-            -- Adjust window based on ping
-            local idealTime = math.max(0.01, hitboxDelay - 0.15 - (ping * 0.5))
+            -- Adjust window based on ping and user offset
+            local pingOffset = ping * 0.5
+            local userOffset = _G.ParryTimingOffset or 0
+            local idealTime = math.max(0.01, hitboxDelay - 0.15 - pingOffset + userOffset)
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
@@ -2237,16 +2313,24 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                 StateL.Text = string.format("Status: ️ TIMING (%.2fs)", idealTime - elapsed)
                 
             elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
-                -- Block! (Holding block through the impact window)
+                -- Block! (Tap block for 200ms)
                 STATE = "PARRY"
-                if not isBlockingNow then doBlock() end
-                parryEndTime = now + 0.25
-                StateL.Text = "Status:  M1 PARRY"
+                if not isBlockingNow then 
+                    doBlock() 
+                    parryEndTime = now + 0.20
+                end
+                
+                -- If tap duration is over, release block immediately!
+                if now > parryEndTime then
+                    if isBlockingNow then releaseBlock() end
+                    enemySkipped[target] = true -- Mark this attack as DONE!
+                end
+                
+                StateL.Text = "Status:  M1 PARRY (TAP)"
                 
             else
-                -- If we missed or successfully parried, we reset but DO NOT skip the next hits of the combo!
-                -- Setting enemyAttackStart to nil allows wireAnimator to register the next punch!
-                enemyAttackStart[target] = nil 
+                -- If we missed or successfully parried (and the window expired), reset!
+                enemySkipped[target] = true 
                 stats.skips = stats.skips + 1
                 STATE = "WAIT_RESET"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
@@ -2327,10 +2411,21 @@ task.spawn(function()
         table.insert(_G.GakuranHubConnections, anim.AnimationPlayed:Connect(function(track)
             if not AutoParryEnabled and not _G.AssistParryEnabled then return end
             local n = string.lower(track.Name or "")
-            local isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
-                or string.find(n,"attack") or string.find(n,"heavy") or string.find(n,"kick")
-                or string.find(n,"swing") or string.find(n,"slam")
-                or string.find(n,"strike") or string.find(n,"charge") or string.find(n,"rush")
+            local isIgnored = string.find(n,"dash") or string.find(n,"roll") or string.find(n,"step")
+                or string.find(n,"walk") or string.find(n,"run") or string.find(n,"idle")
+                or string.find(n,"jump") or string.find(n,"fall") or string.find(n,"move")
+            
+            local isAtk = false
+            if not isIgnored then
+                isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
+                    or string.find(n,"attack") or string.find(n,"heavy") or string.find(n,"kick")
+                    or string.find(n,"swing") or string.find(n,"slam") or string.find(n,"strike")
+                    
+                -- Fallback: If the enemy is in an attacking state, any non-ignored animation is likely a combo hit
+                if not isAtk and enemyIsAttacking(character) then
+                    isAtk = true
+                end
+            end
             if isAtk then
                 local mc = LocalPlayer.Character
                 if mc and mc:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
@@ -2399,6 +2494,11 @@ task.spawn(function()
             local hum = char:FindFirstChild("Humanoid")
             if hum and hum.WalkSpeed < 16 and not char:GetAttribute("Blocking") then
                 hum.WalkSpeed = 16
+            end
+        end
+        if _G.NoParryCooldown and LocalPlayer.Character then
+            if LocalPlayer.Character:GetAttribute("BlockCooldown") then
+                LocalPlayer.Character:SetAttribute("BlockCooldown", nil)
             end
         end
     end
@@ -2882,9 +2982,20 @@ table.insert(_G.GakuranHubConnections, game:GetService("RunService").RenderStepp
     if not bestTarget and lockedTarget and lockedTarget:FindFirstChild("HumanoidRootPart") then
         bestTarget = lockedTarget.HumanoidRootPart
     end
+    
+    -- Priority 3: Keep facing the last enemy we fought
+    if not bestTarget and _G.LastFacedTarget and _G.LastFacedTarget.Parent and _G.LastFacedTarget.Parent:FindFirstChild("Humanoid") and _G.LastFacedTarget.Parent.Humanoid.Health > 0 then
+        local dist = (_G.LastFacedTarget.Position - myPos).Magnitude
+        if dist <= 30 then
+            bestTarget = _G.LastFacedTarget
+        else
+            _G.LastFacedTarget = nil
+        end
+    end
 
     -- Execution: Apply Physics-Safe Rotation
     if bestTarget then
+        _G.LastFacedTarget = bestTarget
         char.Humanoid.AutoRotate = false
         
         local lookDir = (bestTarget.Position - myPos)
@@ -2920,9 +3031,12 @@ table.insert(_G.GakuranHubConnections, game:GetService("RunService").RenderStepp
             align.CFrame = CFrame.lookAt(Vector3.zero, lookDir)
         end
     else
+        _G.LastFacedTarget = nil
         char.Humanoid.AutoRotate = true
         local align = char.HumanoidRootPart:FindFirstChild("FaceAttackerAlign")
         if align then align:Destroy() end
+        local att = char.HumanoidRootPart:FindFirstChild("FaceAttackerAtt")
+        if att then att:Destroy() end
     end
 end))
 
