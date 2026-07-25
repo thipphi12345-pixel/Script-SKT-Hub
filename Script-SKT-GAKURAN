@@ -107,11 +107,13 @@ local isBlockingNow = false
 local lastBlockTime = 0
 local lastAttackTime = 0
 local lastM2Time = 0
+local lastDashTime = 0
 local myComboCount = 0
 
 local enemyAttackStart = {}
 local enemySkipped = {}
 local enemyPrevAttacking = {}
+local enemyPrevM1Count = {}
 local enemySkillStart = {}
 local enemyLastAttacked = {}
 local lockedTarget = nil
@@ -132,7 +134,7 @@ local UI_Config = {
     AccentColor = Color3.fromRGB(220, 20, 40), -- Brutal Crimson Theme
     TextColor = Color3.fromRGB(255, 230, 230),
     DimTextColor = Color3.fromRGB(150, 110, 110),
-    Font = Enum.Font.GothamBold,
+    Font = Enum.Font.Code,
     LogoID = "rbxassetid://136267911004509",
 }
 
@@ -221,7 +223,7 @@ function SKT_UI:CreateWindow(options)
     IntroText.BackgroundTransparency = 1
     IntroText.Text = "SYSTEM INITIALIZING..."
     IntroText.TextColor3 = UI_Config.AccentColor
-    IntroText.Font = Enum.Font.GothamBold
+    IntroText.Font = Enum.Font.Code
     IntroText.TextSize = 40
     IntroText.TextTransparency = 1
     IntroText.Parent = IntroGui
@@ -293,7 +295,7 @@ function SKT_UI:CreateWindow(options)
     MinimizeBtn.BackgroundTransparency = 1
     MinimizeBtn.Text = "-"
     MinimizeBtn.TextColor3 = UI_Config.DimTextColor
-    MinimizeBtn.Font = Enum.Font.GothamBold
+    MinimizeBtn.Font = Enum.Font.Code
     MinimizeBtn.TextSize = 24
     MinimizeBtn.ZIndex = 10
     MinimizeBtn.Parent = MainFrame
@@ -304,7 +306,7 @@ function SKT_UI:CreateWindow(options)
     CloseBtn.BackgroundTransparency = 1
     CloseBtn.Text = "X"
     CloseBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.Font = Enum.Font.Code
     CloseBtn.TextSize = 20
     CloseBtn.ZIndex = 10
     CloseBtn.Parent = MainFrame
@@ -316,7 +318,7 @@ function SKT_UI:CreateWindow(options)
     ResizeBtn.BackgroundTransparency = 1
     ResizeBtn.Text = "↘"
     ResizeBtn.TextColor3 = UI_Config.AccentColor
-    ResizeBtn.Font = Enum.Font.GothamBold
+    ResizeBtn.Font = Enum.Font.Code
     ResizeBtn.TextSize = 14
     ResizeBtn.ZIndex = 10
     ResizeBtn.Parent = MainFrame
@@ -388,11 +390,16 @@ function SKT_UI:CreateWindow(options)
         ToggleUI(true)
     end)
     
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.KeyCode == Enum.KeyCode.RightControl then
+    Window.ToggleKey = Enum.KeyCode.RightShift
+    if ConfigManager.Config["Keybind_UIToggle"] then
+        pcall(function() Window.ToggleKey = Enum.KeyCode[ConfigManager.Config["Keybind_UIToggle"]] or Window.ToggleKey end)
+    end
+    
+    table.insert(_G.GakuranHubConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Window.ToggleKey then
             ToggleUI(not MainFrame.Visible)
         end
-    end)
+    end))
     
     -- Draggable
     local dragging, dragStart, startPos
@@ -452,7 +459,7 @@ function SKT_UI:CreateWindow(options)
     LogoText.BackgroundTransparency = 1
     LogoText.Text = Title
     LogoText.TextColor3 = UI_Config.AccentColor
-    LogoText.Font = Enum.Font.GothamBold
+    LogoText.Font = Enum.Font.Code
     LogoText.TextSize = 18
     LogoText.TextXAlignment = Enum.TextXAlignment.Left
     LogoText.Parent = TopLogo
@@ -491,9 +498,9 @@ function SKT_UI:CreateWindow(options)
     HeaderText.Size = UDim2.new(0, 200, 1, 0)
     HeaderText.Position = UDim2.new(0, 15, 0, 0)
     HeaderText.BackgroundTransparency = 1
-    HeaderText.Text = "🗺️ Gakutan"
+    HeaderText.Text = "️ Gakutan"
     HeaderText.TextColor3 = UI_Config.AccentColor
-    HeaderText.Font = Enum.Font.GothamBold
+    HeaderText.Font = Enum.Font.Code
     HeaderText.TextSize = 14
     HeaderText.TextXAlignment = Enum.TextXAlignment.Left
     HeaderText.Parent = TopHeader
@@ -504,7 +511,7 @@ function SKT_UI:CreateWindow(options)
     DiscordLabel.BackgroundTransparency = 1
     DiscordLabel.Text = "Discord Script"
     DiscordLabel.TextColor3 = UI_Config.DimTextColor
-    DiscordLabel.Font = Enum.Font.GothamBold
+    DiscordLabel.Font = Enum.Font.Code
     DiscordLabel.TextSize = 12
     DiscordLabel.TextXAlignment = Enum.TextXAlignment.Right
     DiscordLabel.Parent = TopHeader
@@ -515,7 +522,7 @@ function SKT_UI:CreateWindow(options)
     DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
     DiscordBtn.Text = "Copy Link"
     DiscordBtn.TextColor3 = Color3.new(1,1,1)
-    DiscordBtn.Font = Enum.Font.GothamBold
+    DiscordBtn.Font = Enum.Font.Code
     DiscordBtn.TextSize = 12
     DiscordBtn.Parent = TopHeader
     CreateCorner(DiscordBtn, 4)
@@ -547,7 +554,7 @@ function SKT_UI:CreateWindow(options)
         TabBtn.BackgroundTransparency = 1
         TabBtn.Text = "  " .. name
         TabBtn.TextColor3 = UI_Config.DimTextColor
-        TabBtn.Font = Enum.Font.GothamBold
+        TabBtn.Font = Enum.Font.Code
         TabBtn.TextSize = 14
         TabBtn.TextXAlignment = Enum.TextXAlignment.Left
         TabBtn.Parent = TabContainer
@@ -667,7 +674,7 @@ function SKT_UI:CreateWindow(options)
             SecText.BackgroundTransparency = 1
             SecText.Text = ">> " .. secName
             SecText.TextColor3 = UI_Config.AccentColor
-            SecText.Font = Enum.Font.GothamBold
+            SecText.Font = Enum.Font.Code
             SecText.TextSize = 15
             SecText.TextXAlignment = Enum.TextXAlignment.Left
             SecText.Parent = SecFrame
@@ -755,6 +762,30 @@ function SKT_UI:CreateWindow(options)
                     opts.Callback(toggled)
                 end)
             end
+            
+            return {
+                Toggle = function(self, state)
+                    if state == nil then
+                        toggled = not toggled
+                    else
+                        toggled = state
+                    end
+                    if opts.Flag then
+                        ConfigManager.Config[opts.Flag] = toggled
+                        ConfigManager:Save()
+                    end
+                    updateToggle(true)
+                    if opts.Callback then
+                        task.spawn(function()
+                            opts.Callback(toggled)
+                        end)
+                    end
+                end,
+                Set = function(self, state)
+                    toggled = state
+                    updateToggle(false)
+                end
+            }
         end
 
         function Tab:CreateSlider(opts)
@@ -1038,7 +1069,7 @@ function SKT_UI:CreateWindow(options)
             ActionBtn.BackgroundColor3 = UI_Config.AccentColor
             ActionBtn.Text = opts.Name
             ActionBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
-            ActionBtn.Font = Enum.Font.GothamBold
+            ActionBtn.Font = Enum.Font.Code
             ActionBtn.TextSize = 14
             ActionBtn.Parent = BtnFrame
             CreateCorner(ActionBtn, 4)
@@ -1128,9 +1159,99 @@ function SKT_UI:CreateWindow(options)
             }
         end
 
+        function Tab:CreateKeybind(opts)
+            local BindFrame = Instance.new("Frame")
+            BindFrame.Size = UDim2.new(1, -10, 0, 45)
+            BindFrame.BackgroundColor3 = UI_Config.CardColor
+            BindFrame.Parent = TabContent
+            CreateCorner(BindFrame, 6)
+            
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(0.6, -10, 1, 0)
+            Label.Position = UDim2.new(0, 15, 0, 0)
+            Label.BackgroundTransparency = 1
+            Label.Text = opts.Name
+            Label.TextColor3 = UI_Config.TextColor
+            Label.Font = UI_Config.Font
+            Label.TextSize = 14
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = BindFrame
+            
+            local BindBtn = Instance.new("TextButton")
+            BindBtn.Size = UDim2.new(0, 90, 0, 25)
+            BindBtn.Position = UDim2.new(1, -105, 0.5, -12.5)
+            BindBtn.BackgroundColor3 = UI_Config.MainColor
+            
+            local initKey = opts.CurrentValue or Enum.KeyCode.RightShift
+            if opts.Flag and ConfigManager.Config[opts.Flag] ~= nil then
+                local savedStr = ConfigManager.Config[opts.Flag]
+                pcall(function() initKey = Enum.KeyCode[savedStr] or initKey end)
+            end
+            
+            BindBtn.Text = initKey.Name
+            BindBtn.TextColor3 = UI_Config.AccentColor
+            BindBtn.Font = UI_Config.Font
+            BindBtn.TextSize = 13
+            BindBtn.Parent = BindFrame
+            CreateCorner(BindBtn, 4)
+            CreateStroke(BindBtn, UI_Config.DimTextColor, 1)
+
+            local currentKey = initKey
+            local binding = false
+
+            BindBtn.MouseButton1Click:Connect(function()
+                if binding then return end
+                binding = true
+                BindBtn.Text = "..."
+                BindBtn.TextColor3 = Color3.fromRGB(255, 255, 0)
+            end)
+
+            table.insert(_G.GakuranHubConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                if binding then
+                    if input.UserInputType == Enum.UserInputType.Keyboard then
+                        if input.KeyCode == Enum.KeyCode.Escape then
+                            BindBtn.Text = currentKey.Name
+                            BindBtn.TextColor3 = UI_Config.AccentColor
+                            binding = false
+                            return
+                        end
+                        currentKey = input.KeyCode
+                        BindBtn.Text = currentKey.Name
+                        BindBtn.TextColor3 = UI_Config.AccentColor
+                        if opts.Flag then
+                            ConfigManager.Config[opts.Flag] = currentKey.Name
+                            ConfigManager:Save()
+                        end
+                        if opts.Callback then
+                            opts.Callback(currentKey, false)
+                        end
+                        binding = false
+                    end
+                else
+                    if not gameProcessed and input.KeyCode == currentKey then
+                        if opts.Callback then
+                            opts.Callback(currentKey, true) -- true indicates a fire event
+                        end
+                    end
+                end
+            end))
+            
+            if opts.Callback then
+                task.spawn(function()
+                    opts.Callback(currentKey, false)
+                end)
+            end
+            
+            return {
+                Set = function(self, newKey)
+                    currentKey = newKey
+                    BindBtn.Text = currentKey.Name
+                end
+            }
+        end
+
         return Tab
     end
-    
     function SKT_UI:Notify(opts)
         print("[SKT_UI Notify]", opts.Title, opts.Content)
     end
@@ -1140,7 +1261,7 @@ end
 
 local Window = SKT_UI:CreateWindow({Name = "SKT Hub"})
 
-local Tab_Main = Window:CreateTab("⚔️ Perfect Combat")
+local Tab_Main = Window:CreateTab("️ Perfect Combat")
 local function updateTargetList(query)
     query = query and string.lower(query) or ""
     local list = {}
@@ -1173,7 +1294,7 @@ Tab_Main:CreateSection("Target Selection")
 local TargetDropdown
 
 Tab_Main:CreateTextbox({
-    Name = "🔍 Search Name:",
+    Name = " Search Name:",
     PlaceholderText = "Type to search...",
     Callback = function(text)
         if TargetDropdown then
@@ -1205,12 +1326,12 @@ TargetDropdown = Tab_Main:CreateDropdown({
     end
 })
 
-Tab_Main:CreateButton({Name = "🔄 Refresh Targets", Callback = function()
+Tab_Main:CreateButton({Name = " Refresh Targets", Callback = function()
     local newList = updateTargetList()
     TargetDropdown:Refresh(newList)
 end})
 
-Tab_Main:CreateButton({Name = "🚀 Teleport to Selected Target", Callback = function()
+Tab_Main:CreateButton({Name = " Teleport to Selected Target", Callback = function()
     if _G.SelectedTargetName then
         local p = game.Players:FindFirstChild(_G.SelectedTargetName)
         if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1223,7 +1344,7 @@ Tab_Main:CreateButton({Name = "🚀 Teleport to Selected Target", Callback = fun
     end
 end})
 
-Tab_Main:CreateToggle({Name = "🎥 Spectator Mode (Follows Selected Target)", CurrentValue = false, Flag = "Spectator", Callback = function(Value)
+Tab_Main:CreateToggle({Name = " Spectator Mode (Follows Selected Target)", CurrentValue = false, Flag = "Spectator", Callback = function(Value)
     _G.SpectatorEnabled = Value
     if Value and _G.SelectedTargetName then
         local p = game.Players:FindFirstChild(_G.SelectedTargetName)
@@ -1237,51 +1358,59 @@ end})
 
 Tab_Main:CreateSection("Auto Features")
 
-Tab_Main:CreateToggle({Name = "🛡️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
+local Toggle_AutoParry = Tab_Main:CreateToggle({Name = "️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
     AutoParryEnabled = Value
 end})
+Tab_Main:CreateKeybind({Name = "Auto Parry Keybind", CurrentValue = Enum.KeyCode.E, Flag = "Keybind_AutoParry", Callback = function(key, fired)
+    if fired and Toggle_AutoParry then Toggle_AutoParry:Toggle() end
+end})
 
-Tab_Main:CreateToggle({Name = "⚔️ Auto Attack (Combo/Chase)", CurrentValue = false, Flag = "AutoAttack", Callback = function(Value)
+local Toggle_AutoAttack = Tab_Main:CreateToggle({Name = "️ Auto Attack (Combo/Chase)", CurrentValue = false, Flag = "AutoAttack", Callback = function(Value)
     AutoAttackEnabled = Value
 end})
 
+_G.AutoDashEnabled = false
+local Toggle_AutoDash = Tab_Main:CreateToggle({Name = "💨 Auto Dash (Dodge Heavy/Behind)", CurrentValue = false, Flag = "AutoDash", Callback = function(Value)
+    _G.AutoDashEnabled = Value
+end})
+
 _G.FaceTargetEnabled = true
-Tab_Main:CreateToggle({Name = "👁️ Face Target (Auto Aim)", CurrentValue = true, Flag = "FaceTarget", Callback = function(Value)
+Tab_Main:CreateToggle({Name = "️ Face Target (Auto Aim)", CurrentValue = true, Flag = "FaceTarget", Callback = function(Value)
     _G.FaceTargetEnabled = Value
 end})
 
 _G.TargetMode = "Near Lock Target"
-Tab_Main:CreateDropdown({Name = "🎯 Combat Target Mode", Options = {"Near Lock Target", "Nearest Target", "Selected Target", "Lowest Health Target"}, CurrentOption = "Near Lock Target", Flag = "TargetMode", Callback = function(Option)
+Tab_Main:CreateDropdown({Name = " Combat Target Mode", Options = {"Near Lock Target", "Nearest Target", "Selected Target", "Lowest Health Target"}, CurrentOption = "Near Lock Target", Flag = "TargetMode", Callback = function(Option)
     local opt = type(Option) == "table" and Option[1] or Option
     _G.TargetMode = opt
 end})
 
-local Tab_Finishing = Window:CreateTab("💀 Brutal Executions")
+local Tab_Finishing = Window:CreateTab(" Brutal Executions")
 Tab_Finishing:CreateSection("Execute & Carry Options")
 
 _G.FinishTargetMode = "Nearest Lock Target (Close Range)"
-Tab_Finishing:CreateDropdown({Name = "💀 Execute/Carry Target", Options = {"Nearest Lock Target (Close Range)", "Selected Target"}, CurrentOption = "Nearest Lock Target (Close Range)", Flag = "FinishTargetMode", Callback = function(Option)
+Tab_Finishing:CreateDropdown({Name = " Execute/Carry Target", Options = {"Nearest Lock Target (Close Range)", "Selected Target"}, CurrentOption = "Nearest Lock Target (Close Range)", Flag = "FinishTargetMode", Callback = function(Option)
     local opt = type(Option) == "table" and Option[1] or Option
     _G.FinishTargetMode = opt
 end})
 
-Tab_Finishing:CreateToggle({Name = "💀 Auto Execute (Grip)", CurrentValue = false, Flag = "AutoExecute", Callback = function(Value)
+Tab_Finishing:CreateToggle({Name = " Auto Execute (Grip)", CurrentValue = false, Flag = "AutoExecute", Callback = function(Value)
     _G.AutoExecuteEnabled = Value
 end})
 
-Tab_Finishing:CreateToggle({Name = "🏋️ Auto Carry (When Knocked)", CurrentValue = false, Flag = "AutoCarry", Callback = function(Value)
+Tab_Finishing:CreateToggle({Name = "️ Auto Carry (When Knocked)", CurrentValue = false, Flag = "AutoCarry", Callback = function(Value)
     _G.AutoCarryEnabled = Value
 end})
 
-local Tab_Survival = Window:CreateTab("🛡️ Ultimate Survival")
+local Tab_Survival = Window:CreateTab("️ Ultimate Survival")
 Tab_Survival:CreateSection("Survival Tools")
 
-Tab_Survival:CreateToggle({Name = "🚑 Auto Revive (Respawn/Struggle)", CurrentValue = false, Flag = "AutoRevive", Callback = function(Value)
+Tab_Survival:CreateToggle({Name = " Auto Revive (Respawn/Struggle)", CurrentValue = false, Flag = "AutoRevive", Callback = function(Value)
     _G.AutoReviveEnabled = Value
 end})
 
 Tab_Survival:CreateSlider({
-    Name = "🏃 Custom Walk/Sprint Speed",
+    Name = " Custom Walk/Sprint Speed",
     Range = {16, 150},
     CurrentValue = 16,
     Increment = 1,
@@ -1291,11 +1420,11 @@ Tab_Survival:CreateSlider({
     end
 })
 
-Tab_Survival:CreateToggle({Name = "🏃 Auto Save (Hide Underground at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
+Tab_Survival:CreateToggle({Name = " Auto Save (Hide Underground at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
     _G.AutoFleeEnabled = Value
 end})
 
-Tab_Survival:CreateToggle({Name = "🚫 Anti-Grab / Anti-Stun", CurrentValue = false, Flag = "AntiStun", Callback = function(Value)
+Tab_Survival:CreateToggle({Name = " Anti-Grab / Anti-Stun", CurrentValue = false, Flag = "AntiStun", Callback = function(Value)
     _G.AntiStunEnabled = Value
 end})
 
@@ -1319,7 +1448,7 @@ local TargetL = createTextProxy(Tab_Main:CreateLabel({Name = "Target: None"}))
 local ActionL = createTextProxy(Tab_Main:CreateLabel({Name = "", TextColor = UI_Config.DimTextColor}))
 local StatsL = createTextProxy(Tab_Main:CreateLabel({Name = "Parry:0  Hits:0  Kills:0", TextColor = Color3.fromRGB(90, 200, 90)}))
 
-local Tab_Visuals = Window:CreateTab("👁️ Tactical ESP")
+local Tab_Visuals = Window:CreateTab("️ Tactical ESP")
 Tab_Visuals:CreateSection("ESP Settings")
 
 _G.ESP = {
@@ -1344,7 +1473,7 @@ Tab_Visuals:CreateToggle({Name = "Head Dot", CurrentValue = false, Flag = "ESP_H
 Tab_Visuals:CreateToggle({Name = "Names", CurrentValue = false, Flag = "ESP_Names", Callback = function(v) _G.ESP.Names = v end})
 Tab_Visuals:CreateToggle({Name = "Attributes", CurrentValue = false, Flag = "ESP_Attributes", Callback = function(v) _G.ESP.Attributes = v end})
 
-local Tab_ParrySettings = Window:CreateTab("⏱️ Precision Parry")
+local Tab_ParrySettings = Window:CreateTab("️ Precision Parry")
 Tab_ParrySettings:CreateSection("Adjust Parry Delay Per Style")
 
 for styleName, data in pairs(STYLE_DATA) do
@@ -1360,12 +1489,12 @@ for styleName, data in pairs(STYLE_DATA) do
     })
 end
 
-local Tab_ServerHop = Window:CreateTab("🌐 Server Hopper")
+local Tab_ServerHop = Window:CreateTab(" Server Hopper")
 Tab_ServerHop:CreateSection("Server Management")
-Tab_ServerHop:CreateButton({Name = "🔄 Rejoin Current Server", Callback = function()
+Tab_ServerHop:CreateButton({Name = " Rejoin Current Server", Callback = function()
     game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, game.Players.LocalPlayer)
 end})
-Tab_ServerHop:CreateButton({Name = "🌐 Hop to Different Server", Callback = function()
+Tab_ServerHop:CreateButton({Name = " Hop to Different Server", Callback = function()
     local HttpService = game:GetService("HttpService")
     local TeleportService = game:GetService("TeleportService")
     local sfUrl = "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100"
@@ -1390,9 +1519,19 @@ end})
 
 
 
-local Tab_Settings = Window:CreateTab("⚙️ Hub Settings")
+local Tab_Settings = Window:CreateTab("️ Hub Settings")
 Tab_Settings:CreateSection("UI Settings")
 
+Tab_Settings:CreateKeybind({
+    Name = "Toggle UI Keybind",
+    CurrentValue = Enum.KeyCode.RightShift,
+    Flag = "Keybind_UIToggle",
+    Callback = function(key, fired)
+        if not fired then
+            Window.ToggleKey = key
+        end
+    end
+})
 local function getGui()
     local core = (gethui and gethui()) or game:GetService("CoreGui")
     local sg = core:FindFirstChild("SKT_Hub_Custom") or (LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SKT_Hub_Custom"))
@@ -1423,35 +1562,38 @@ Tab_Settings:CreateDropdown({
         pcall(function()
             local sg = getGui()
             if sg then
-                local mainFrame = sg:FindFirstChild("MainFrame")
-                if mainFrame then
-                    local stroke = mainFrame:FindFirstChildOfClass("UIStroke")
-                    if stroke then stroke.Color = color end
+                local function rgbMatch(c1, c2)
+                    return math.abs(c1.R - c2.R) < 0.01 and math.abs(c1.G - c2.G) < 0.01 and math.abs(c1.B - c2.B) < 0.01
                 end
-                
+
                 for _, obj in ipairs(sg:GetDescendants()) do
-                    if obj.Name == "HeaderText" or obj.Name == "ResizeBtn" or obj.Name == "LogoText" then
-                        obj.TextColor3 = color
-                    elseif obj:IsA("TextLabel") and string.sub(obj.Text, 1, 3) == ">> " then
-                        obj.TextColor3 = color
-                    elseif obj.Name == "SliderFill" then
-                        obj.BackgroundColor3 = color
-                    elseif obj.Name == "ToggleCircle" then
-                        if obj.Position.X.Offset == -17 then
+                    if obj:IsA("GuiObject") or obj:IsA("UIStroke") then
+                        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                            if rgbMatch(obj.TextColor3, oldColor) then
+                                obj.TextColor3 = color
+                            end
+                        end
+                        if obj:IsA("GuiObject") then
+                            if rgbMatch(obj.BackgroundColor3, oldColor) then
+                                obj.BackgroundColor3 = color
+                            end
+                        end
+                        if obj:IsA("UIStroke") then
+                            if rgbMatch(obj.Color, oldColor) then
+                                obj.Color = color
+                            end
+                        end
+                    end
+                    
+                    -- Specific fix for Toggle Buttons (which use a dimmed 20% color)
+                    if obj.Name == "ToggleCircle" and obj:IsA("Frame") then
+                        if obj.Position.X.Offset == -17 then -- Toggled ON
                             obj.BackgroundColor3 = color
                             if obj.Parent and obj.Parent:IsA("TextButton") then
                                 obj.Parent.BackgroundColor3 = Color3.fromRGB(color.R*255*0.2, color.G*255*0.2, color.B*255*0.2)
                             end
                         end
-                    elseif obj:IsA("TextLabel") and obj.Name == "Status: Waiting..." then
-                        obj.TextColor3 = color
                     end
-                end
-                
-                local miniBtn = sg:FindFirstChild("MiniBtn")
-                if miniBtn then
-                    local mstroke = miniBtn:FindFirstChildOfClass("UIStroke")
-                    if mstroke then mstroke.Color = color end
                 end
             end
         end)
@@ -1628,7 +1770,12 @@ end
 
 local function enemyIsUsingSkill(enemy)
     local cant = enemy:GetAttribute("CantAnything")==true
-    return cant and not enemyIsAttacking(enemy) and not enemyIsStunned(enemy)
+    local isDashing = false
+    local hrp = enemy:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp.Velocity.Magnitude > 35 then
+        isDashing = true
+    end
+    return cant and not enemyIsAttacking(enemy) and not enemyIsStunned(enemy) and not isDashing
 end
 
 local function enemyIsHeavyAttacking(enemy)
@@ -1860,7 +2007,7 @@ end
 -- // PARRY & ATTACK RANGE //
 local M1_RANGE = 7 -- Expanded from 5 for Hitbox Expander
 local M2_RANGE = 7
-local PARRY_RANGE = 15 -- Reduced to 15 to ignore far away shadow-boxing
+local PARRY_RANGE = 9 -- Reduced to 9 to ignore far away shadow-boxing
 local CHASE_RANGE = 500
 
 -- // MAIN BRAIN //
@@ -1990,38 +2137,24 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     -- Ensure we are not currently executing or carrying someone!
     if _G.IsExecuting then return end
     
-    -- FACE TARGET LOGIC
-    if _G.FaceTargetEnabled and not isDowned then
-        hum.AutoRotate = false -- Disable built-in rotation
-        local bg = char.HumanoidRootPart:FindFirstChild("FaceTargetGyro")
-        if not bg then
-            bg = Instance.new("BodyGyro")
-            bg.Name = "FaceTargetGyro"
-            bg.MaxTorque = Vector3.new(0, 1000000, 0) -- Only rotate on Y axis (Left/Right)
-            bg.P = 500000 -- Insanely high power for INSTANT snapping
-            bg.D = 50 -- Low dampening to eliminate turn delay
-            bg.Parent = char.HumanoidRootPart
-        end
-        local lookDir = (targetRoot.Position - myPos)
-        if lookDir.Magnitude > 0 then
-            bg.CFrame = CFrame.new(myPos, myPos + Vector3.new(lookDir.X, 0, lookDir.Z))
-        end
-    else
-        hum.AutoRotate = true
-        local bg = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart:FindFirstChild("FaceTargetGyro")
-        if bg then bg:Destroy() end
-    end
+
     
     local e_attacking = enemyIsAttacking(target)
     local prev_attacking = enemyPrevAttacking[target] or false
+    
+    local currentM1Count = target:GetAttribute("M1Count") or 0
+    local prevM1Count = enemyPrevM1Count[target] or 0
+    local comboHitTriggered = (currentM1Count ~= prevM1Count)
+    enemyPrevM1Count[target] = currentM1Count
+
     local temp_e_isHeavy = enemyIsHeavyAttacking(target)
     local temp_hitboxDelay = getHitboxDelay(target, temp_e_isHeavy)
     
-    if e_attacking then
+    if e_attacking or comboHitTriggered then
         enemyLastAttacked[target] = now
         -- Allow wireAnimator to handle combo timings if possible, 
-        -- but if this is the very first strike, log it.
-        if not prev_attacking and not enemyAttackStart[target] then
+        -- but if this is the very first strike OR a combo hit, log it.
+        if (not prev_attacking or comboHitTriggered) and not enemyAttackStart[target] then
             enemyAttackStart[target] = now
             enemySkipped[target] = nil
         end
@@ -2066,12 +2199,79 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         enemyAttackStart[target] = nil
         enemySkipped[target] = nil
         
-        StateL.Text = "Status: 💥 PUNISH COMBO"
+        StateL.Text = "Status:  PUNISH COMBO"
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = string.format("Combo Hit #%d", myComboCount)
         
+    -- PRIORITY 1.5: AUTO DASH (EVASION)
+    elseif _G.AutoDashEnabled and target and target.PrimaryPart and char.PrimaryPart and (enemyAttackStart[target] or e_isHeavy) then
+        local myLook = char.PrimaryPart.CFrame.LookVector
+        local dirToEnemy = (target.PrimaryPart.Position - char.PrimaryPart.Position).Unit
+        local dot = myLook:Dot(dirToEnemy)
+        
+        local dodged = false
+        
+        -- Dodge M1 from behind (Ignore if they are just dashing past us)
+        if not e_isHeavy and not e_skill and dot < -0.2 and dist <= (PARRY_RANGE + 3) then
+            if target.PrimaryPart.Velocity.Magnitude < 35 and (now - lastDashTime > 1.5) then
+                lastDashTime = now
+                dodged = true
+                
+                task.spawn(function()
+                    local VirtualInputManager = game:GetService("VirtualInputManager")
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                    task.wait(0.01)
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                    task.wait(0.1)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                end)
+                
+                ActionL.Text = "Dash Forward (M1 Behind)"
+                enemyAttackStart[target] = nil -- Reset state
+            end
+        end
+        
+        -- Dodge Heavy Attack (Guard Break)
+        if e_isHeavy and dist <= 20 and not dodged then
+            if now - lastDashTime > 1.5 then
+                lastDashTime = now
+                dodged = true
+                
+                local cross = myLook:Cross(dirToEnemy)
+                local dodgeKey = Enum.KeyCode.S
+                
+                -- If they are directly in front, step aside!
+                if dot > 0.5 then
+                    if cross.Y > 0 then
+                        dodgeKey = Enum.KeyCode.D
+                    else
+                        dodgeKey = Enum.KeyCode.A
+                    end
+                end
+                
+                task.spawn(function()
+                    local VirtualInputManager = game:GetService("VirtualInputManager")
+                    VirtualInputManager:SendKeyEvent(true, dodgeKey, false, game)
+                    task.wait(0.01)
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                    task.wait(0.1)
+                    VirtualInputManager:SendKeyEvent(false, dodgeKey, false, game)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                end)
+                
+                ActionL.Text = "Dash " .. dodgeKey.Name .. " (Heavy)"
+            end
+        end
+        
+        if dodged then
+            STATE = "IDLE"
+            if isBlockingNow then releaseBlock() end
+            return
+        end
+
     -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
-    elseif AutoParryEnabled and ((enemyAttackStart[target] and dist <= PARRY_RANGE) or (e_skill and dist <= 30) or (e_isHeavy and dist <= 20)) then
+    elseif AutoParryEnabled and (enemyAttackStart[target] and dist <= PARRY_RANGE) then
         
         -- Stop attacking to ensure we can defend
         if weAreAttacking() then forceStopAttack() end
@@ -2079,22 +2279,11 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         local isGuardBroken = char:GetAttribute("GuardBroken") == true
         
 
-        if e_skill and skillElapsed < 1.2 then
-            STATE = "PARRY"
-            doBlock()
-            parryEndTime = now + 0.5
-            StateL.Text = "Status: 🎯 SKILL BLOCK"
-            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
-            ActionL.Text = "Blocking skill!"
-        elseif e_skill and skillElapsed >= 1.2 then
-            STATE = "WAIT_RESET"
-            if isBlockingNow and now > parryEndTime then releaseBlock() end
-            StateL.Text = "Status: ⏳ SKILL TIMEOUT"
-        elseif enemySkipped[target] then
+        if enemySkipped[target] then
             STATE = "WAIT_RESET"
             -- Always release block if parry window expires to prevent "holding block"
             if isBlockingNow and now > parryEndTime then releaseBlock() end
-            StateL.Text = "Status: ⏳ WAIT RESET"
+            StateL.Text = "Status:  WAIT RESET"
         else
             -- SMART PARRY LOGIC (Ping Compensated, Distance Calculated & Multi-Hit Combo Support)
             local pingStr = "0"
@@ -2112,14 +2301,14 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
-                StateL.Text = string.format("Status: ⏱️ TIMING (%.2fs)", idealTime - elapsed)
+                StateL.Text = string.format("Status: ️ TIMING (%.2fs)", idealTime - elapsed)
                 
             elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
                 -- Block! (Holding block through the impact window)
                 STATE = "PARRY"
                 if not isBlockingNow then doBlock() end
                 parryEndTime = now + 0.25
-                StateL.Text = "Status: ⚡ M1 PARRY"
+                StateL.Text = "Status:  M1 PARRY"
                 
             else
                 -- If we missed or successfully parried, we reset but DO NOT skip the next hits of the combo!
@@ -2128,7 +2317,7 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                 stats.skips = stats.skips + 1
                 STATE = "WAIT_RESET"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
-                StateL.Text = "Status: ❌ PARRY DONE/MISSED"
+                StateL.Text = "Status:  PARRY DONE/MISSED"
             end
             
             TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
@@ -2142,7 +2331,7 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
         if now - lastM2Time >= M2_COOLDOWN then
             doHeavyAttack()
-            StateL.Text = "Status: 🔨 GUARD BREAK"
+            StateL.Text = "Status:  GUARD BREAK"
             TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
             ActionL.Text = "Using Heavy (R)!"
         end
@@ -2153,7 +2342,7 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         if isBlockingNow then releaseBlock() end
         
         doM1()
-        StateL.Text = "Status: 👊 ATTACKING"
+        StateL.Text = "Status:  ATTACKING"
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = "Enemy is open!"
         
@@ -2171,14 +2360,14 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
         hum:MoveTo(targetRoot.Position)
         
-        StateL.Text = "Status: 🏃 CHASING"
+        StateL.Text = "Status:  CHASING"
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = "Closing distance to target"
         
     else
         STATE = "IDLE"
         if isBlockingNow then releaseBlock() end
-        StateL.Text = "Status: 👁️ WATCHING"
+        StateL.Text = "Status: ️ WATCHING"
         TargetL.Text = string.format("Target: %s [%s] [%.0fst]", target.Name, string.upper(target:GetAttribute("CombatStyle") or "DEFAULT"), dist)
         ActionL.Text = "In range, waiting for opening..."
     end
@@ -2207,7 +2396,7 @@ task.spawn(function()
             local n = string.lower(track.Name or "")
             local isAtk = string.find(n,"m1") or string.find(n,"m2") or string.find(n,"punch")
                 or string.find(n,"attack") or string.find(n,"heavy") or string.find(n,"kick")
-                or string.find(n,"swing") or string.find(n,"slam") or string.find(n,"dash")
+                or string.find(n,"swing") or string.find(n,"slam")
                 or string.find(n,"strike") or string.find(n,"charge") or string.find(n,"rush")
             if isAtk then
                 local mc = LocalPlayer.Character
@@ -2670,22 +2859,119 @@ local assistLastHitTime = 0
 -- offset shifts parry earlier, misses tracks consecutive failures
 local assistStyleLearn = {}
 
-task.spawn(function()
-    while _G.GakuranHubLoopId == currentLoopId do
-        task.wait()
-        
-        -- Custom Walk Speed
+table.insert(_G.GakuranHubConnections, game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+    if _G.CustomWalkSpeed and _G.CustomWalkSpeed > 16 then
         local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            if _G.CustomWalkSpeed and _G.CustomWalkSpeed > 16 then
-                if not (AutoAttackEnabled and (STATE == "CHASE" or STATE == "ATTACK" or STATE == "PUNISH")) then
-                    char.Humanoid.WalkSpeed = _G.CustomWalkSpeed
+        if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
+            -- Don't apply custom speed if Auto Attack is actively fighting
+            if AutoAttackEnabled and (STATE == "CHASE" or STATE == "ATTACK" or STATE == "PUNISH") then
+                return
+            end
+            
+            local hum = char.Humanoid
+            if hum.MoveDirection.Magnitude > 0 then
+                -- Calculate extra speed needed beyond current WalkSpeed
+                local extraSpeed = _G.CustomWalkSpeed - hum.WalkSpeed
+                if extraSpeed > 0 then
+                    -- CFrame Bypass: Move physically without triggering WalkSpeed anti-cheat
+                    char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (hum.MoveDirection * extraSpeed * deltaTime)
                 end
             end
         end
-        
-
     end
-end)
+end))
+
+-- // DYNAMIC FACE ATTACKER (AlignOrientation Bypass) //
+table.insert(_G.GakuranHubConnections, game:GetService("RunService").RenderStepped:Connect(function()
+    if not _G.FaceTargetEnabled then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.AutoRotate = true
+            local align = char.HumanoidRootPart:FindFirstChild("FaceAttackerAlign")
+            if align then align:Destroy() end
+            local att = char.HumanoidRootPart:FindFirstChild("FaceAttackerAtt")
+            if att then att:Destroy() end
+        end
+        return
+    end
+
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
+    
+    if char:GetAttribute("Downed") == true or char.Humanoid.Health <= 0 then
+        char.Humanoid.AutoRotate = true
+        return
+    end
+
+    local myPos = char.HumanoidRootPart.Position
+    local bestTarget = nil
+    
+    -- Priority 1: Face the closest enemy who is CURRENTLY attacking us (From any direction!)
+    local closestAttackerDist = math.huge
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local ec = p.Character
+            local dist = (ec.HumanoidRootPart.Position - myPos).Magnitude
+            if dist <= 30 then
+                -- Check EVERYTHING to guarantee real-time detection
+                local e_atk = enemyAttackStart[ec] or enemyIsAttacking(ec) or enemyIsHeavyAttacking(ec)
+                local e_skill = enemyIsUsingSkill(ec)
+                if e_atk or e_skill then
+                    if dist < closestAttackerDist then
+                        closestAttackerDist = dist
+                        bestTarget = ec.HumanoidRootPart
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Priority 2: If no one is attacking, just face our Locked Target
+    if not bestTarget and lockedTarget and lockedTarget:FindFirstChild("HumanoidRootPart") then
+        bestTarget = lockedTarget.HumanoidRootPart
+    end
+
+    -- Execution: Apply Physics-Safe Rotation
+    if bestTarget then
+        char.Humanoid.AutoRotate = false
+        
+        local lookDir = (bestTarget.Position - myPos)
+        if lookDir.Magnitude > 0.1 then
+            lookDir = Vector3.new(lookDir.X, 0, lookDir.Z).Unit
+            
+            -- Fallback instant CFrame snap for real-time responsiveness (before AlignOrientation catches up)
+            char.HumanoidRootPart.CFrame = CFrame.lookAt(char.HumanoidRootPart.Position, char.HumanoidRootPart.Position + lookDir)
+            
+            -- Use AlignOrientation to hold the angle perfectly without physics stutter
+            local align = char.HumanoidRootPart:FindFirstChild("FaceAttackerAlign")
+            local att = char.HumanoidRootPart:FindFirstChild("FaceAttackerAtt")
+            
+            if not align or not att then
+                if align then align:Destroy() end
+                if att then att:Destroy() end
+                
+                att = Instance.new("Attachment")
+                att.Name = "FaceAttackerAtt"
+                att.Parent = char.HumanoidRootPart
+                
+                align = Instance.new("AlignOrientation")
+                align.Name = "FaceAttackerAlign"
+                align.Mode = Enum.OrientationAlignmentMode.OneAttachment
+                align.Attachment0 = att
+                align.RigidityEnabled = true
+                align.MaxAngularVelocity = math.huge
+                align.MaxTorque = math.huge
+                align.Responsiveness = 200
+                align.Parent = char.HumanoidRootPart
+            end
+            
+            align.CFrame = CFrame.lookAt(Vector3.zero, lookDir)
+        end
+    else
+        char.Humanoid.AutoRotate = true
+        local align = char.HumanoidRootPart:FindFirstChild("FaceAttackerAlign")
+        if align then align:Destroy() end
+    end
+end))
 
 print("[SKT Hub] Loaded! UI Created.")
