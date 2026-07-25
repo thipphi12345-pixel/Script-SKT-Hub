@@ -1369,10 +1369,6 @@ local Toggle_AutoAttack = Tab_Main:CreateToggle({Name = "️ Auto Attack (Combo/
     AutoAttackEnabled = Value
 end})
 
-_G.AutoDashEnabled = false
-local Toggle_AutoDash = Tab_Main:CreateToggle({Name = "💨 Auto Dash (Dodge Heavy/Behind)", CurrentValue = false, Flag = "AutoDash", Callback = function(Value)
-    _G.AutoDashEnabled = Value
-end})
 
 _G.FaceTargetEnabled = true
 Tab_Main:CreateToggle({Name = "️ Face Target (Auto Aim)", CurrentValue = true, Flag = "FaceTarget", Callback = function(Value)
@@ -1420,7 +1416,7 @@ Tab_Survival:CreateSlider({
     end
 })
 
-Tab_Survival:CreateToggle({Name = " Auto Save (Hide Underground at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
+Tab_Survival:CreateToggle({Name = " Auto Save (Float to Infirmary at 40% HP)", CurrentValue = false, Flag = "AutoFlee", Callback = function(Value)
     _G.AutoFleeEnabled = Value
 end})
 
@@ -2196,10 +2192,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     local myLook = char.PrimaryPart and char.PrimaryPart.CFrame.LookVector
     local dirToEnemy = char.PrimaryPart and target.PrimaryPart and (target.PrimaryPart.Position - char.PrimaryPart.Position).Unit
-    local dot = (myLook and dirToEnemy) and myLook:Dot(dirToEnemy) or 0
-    local shouldDodgeM1Behind = (enemyAttackStart[target] and not e_isHeavy and not e_skill and dot < -0.2 and dist <= (_G.ParryRange + 3) and target.PrimaryPart and target.PrimaryPart.Velocity.Magnitude < 35)
-    local shouldDodgeHeavy = (e_isHeavy and dist <= 20)
-    local willDodge = _G.AutoDashEnabled and (now - lastDashTime > 1.5) and (shouldDodgeM1Behind or shouldDodgeHeavy)
 
     -- PRIORITY 1: PUNISH (Stunned Enemy)
     if AutoAttackEnabled and e_stunned and dist <= M1_RANGE then
@@ -2215,47 +2207,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = string.format("Combo Hit #%d", myComboCount)
         
-    -- PRIORITY 1.5: AUTO DASH (EVASION)
-    elseif willDodge then
-        lastDashTime = now
-        
-        if shouldDodgeM1Behind then
-            task.spawn(function()
-                local VirtualInputManager = game:GetService("VirtualInputManager")
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-                task.wait(0.01)
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                task.wait(0.1)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-            end)
-            
-            ActionL.Text = "Dash Forward (M1 Behind)"
-            enemyAttackStart[target] = nil -- Reset state
-        elseif shouldDodgeHeavy then
-            local cross = myLook:Cross(dirToEnemy)
-            local dodgeKey = Enum.KeyCode.S
-            
-            if dot > 0.5 then
-                if cross.Y > 0 then dodgeKey = Enum.KeyCode.D
-                else dodgeKey = Enum.KeyCode.A end
-            end
-            
-            task.spawn(function()
-                local VirtualInputManager = game:GetService("VirtualInputManager")
-                VirtualInputManager:SendKeyEvent(true, dodgeKey, false, game)
-                task.wait(0.01)
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                task.wait(0.1)
-                VirtualInputManager:SendKeyEvent(false, dodgeKey, false, game)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-            end)
-            ActionL.Text = "Dash " .. dodgeKey.Name .. " (Heavy)"
-        end
-        
-        STATE = "IDLE"
-        if isBlockingNow then releaseBlock() end
-        return
 
     -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
     elseif AutoParryEnabled and (enemyAttackStart[target] and dist <= _G.ParryRange) then
@@ -2759,42 +2710,61 @@ end)
 task.spawn(function()
     local isFleeing = false
     local savedCFrame = nil
+    local tween = nil
+    local ts = game:GetService("TweenService")
+    
     while _G.GakuranHubLoopId == currentLoopId do
         task.wait(0.2)
-        if _G.AutoFleeEnabled and LocalPlayer.Character then
-            local char = LocalPlayer.Character
-            local hum = char:FindFirstChild("Humanoid")
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hum and hrp and hum.Health > 0 and char:GetAttribute("Downed") ~= true then
-                local healthPct = hum.Health / hum.MaxHealth
-                if healthPct < 0.4 and not isFleeing then
-                    isFleeing = true
-                    savedCFrame = hrp.CFrame -- Save current position
-                    
-                    -- เปลี่ยนจากวาร์ปขึ้น 100,000 เป็นแค่บินขึ้นไป 150 studs ให้พ้นระยะการโจมตีพอครับ
-                    char:PivotTo(CFrame.new(hrp.Position.X, hrp.Position.Y + 150, hrp.Position.Z))
-                    hrp.Velocity = Vector3.new(0,0,0)
-                    
-                    -- Anchor all parts to freeze safely in the sky
-                    for _, v in ipairs(char:GetDescendants()) do
-                        if v:IsA("BasePart") then v.Anchored = true end
-                    end
-                    
-                elseif isFleeing and healthPct >= 0.95 then
-                    isFleeing = false
-                    
-                    -- Unanchor first
-                    for _, v in ipairs(char:GetDescendants()) do
-                        if v:IsA("BasePart") then v.Anchored = false end
-                    end
-                    
-                    -- Teleport back to where we were fighting
-                    if savedCFrame then
-                        char:PivotTo(savedCFrame)
-                        savedCFrame = nil
-                    end
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if _G.AutoFleeEnabled and hum and hrp and hum.Health > 0 and char:GetAttribute("Downed") ~= true then
+            local healthPct = hum.Health / hum.MaxHealth
+            if healthPct < 0.4 and not isFleeing then
+                isFleeing = true
+                savedCFrame = hrp.CFrame -- Save current position
+                
+                -- Anchor parts for safe floating
+                for _, v in ipairs(char:GetDescendants()) do
+                    if v:IsA("BasePart") then v.Anchored = true end
+                end
+                
+                local targetPos = Vector3.new(56.517852783203125, 50.103145599365234, -28.336639404296875)
+                local dist = (hrp.Position - targetPos).Magnitude
+                local tInfo = TweenInfo.new(dist / 150, Enum.EasingStyle.Linear)
+                tween = ts:Create(hrp, tInfo, {CFrame = CFrame.new(targetPos)})
+                tween:Play()
+                
+            elseif isFleeing and healthPct >= 0.95 then
+                isFleeing = false
+                if tween then tween:Cancel() end
+                
+                -- Float back to the original position
+                if savedCFrame then
+                    local dist = (hrp.Position - savedCFrame.Position).Magnitude
+                    local tInfo = TweenInfo.new(dist / 150, Enum.EasingStyle.Linear)
+                    local returnTween = ts:Create(hrp, tInfo, {CFrame = savedCFrame})
+                    returnTween:Play()
+                    returnTween.Completed:Wait()
+                    savedCFrame = nil
+                end
+                
+                -- Unanchor after reaching destination
+                for _, v in ipairs(char:GetDescendants()) do
+                    if v:IsA("BasePart") then v.Anchored = false end
                 end
             end
+        elseif not _G.AutoFleeEnabled and isFleeing then
+            -- Failsafe: User disabled Auto Flee while fleeing
+            isFleeing = false
+            if tween then tween:Cancel() end
+            if char then
+                for _, v in ipairs(char:GetDescendants()) do
+                    if v:IsA("BasePart") then v.Anchored = false end
+                end
+            end
+            savedCFrame = nil
         end
     end
 end)
@@ -2816,11 +2786,11 @@ task.spawn(function()
                 local isDead = (hum and hum.Health <= 0) or char:GetAttribute("Knocked") == true or char:GetAttribute("Downed") == true
                 
                 if isDead then
-                    if not _G.lastHeartClickTime or os.clock() - _G.lastHeartClickTime >= 0.1 then
+                    if not _G.lastHeartClickTime or os.clock() - _G.lastHeartClickTime >= 1.0 then
                         _G.lastHeartClickTime = os.clock()
                         
-                        local cx = 10
-                        local cy = 50
+                        local cx = camera.ViewportSize.X / 2
+                        local cy = camera.ViewportSize.Y / 2
                         
                         VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
                         task.wait(0.02)
