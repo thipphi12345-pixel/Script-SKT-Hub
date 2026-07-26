@@ -1362,6 +1362,10 @@ Tab_Main:CreateSection("Auto Features")
 local Toggle_AutoParry = Tab_Main:CreateToggle({Name = "️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
     AutoParryEnabled = Value
 end})
+
+local Toggle_AutoDodgeHeavy = Tab_Main:CreateToggle({Name = "️ Auto Dodge Heavy (R)", CurrentValue = false, Flag = "AutoDodgeHeavy", Callback = function(Value)
+    _G.AutoDodgeHeavyEnabled = Value
+end})
 Tab_Main:CreateKeybind({Name = "Auto Parry Keybind", CurrentValue = Enum.KeyCode.E, Flag = "Keybind_AutoParry", Callback = function(key, fired)
     if fired and Toggle_AutoParry then Toggle_AutoParry:Toggle() end
 end})
@@ -1532,16 +1536,16 @@ Tab_ParrySettings:CreateSlider({
     end,
 })
 
-_G.ParryReactionSpeed = 0.15
+_G.FirstHitOffset = 0.10
 Tab_ParrySettings:CreateSlider({
-    Name = " Parry Reaction Speed (ความไวในการ Parry)",
-    Range = {0.05, 0.30},
+    Name = " First Hit Offset (หักลบเวลาหมัดแรก)",
+    Range = {0.00, 0.30},
     Increment = 0.01,
     Suffix = "s",
-    CurrentValue = 0.15,
-    Flag = "Parry_Reaction_Speed",
+    CurrentValue = 0.10,
+    Flag = "First_Hit_Offset",
     Callback = function(Value)
-        _G.ParryReactionSpeed = Value
+        _G.FirstHitOffset = Value
     end,
 })
 
@@ -1836,7 +1840,18 @@ local function getHitboxDelay(enemy, isM2)
         -- Add delay specifically for Heavy attacks (R)
         return d.m2 + (_G.HeavyDelayOffset or 0.2)
     end
-    return d.m1
+    
+    local delay = d.m1
+    local m1Count = enemy:GetAttribute("M1Count") or enemy:GetAttribute("ComboCount") or 1
+    
+    -- Hit 1 is inherently faster in most combat styles AND suffers from the 
+    -- initial double network replicate delay (Attacker -> Server -> Us).
+    -- Deducting ensures we don't parry late on the very first punch!
+    if m1Count == 1 or m1Count == 0 then
+        delay = delay - (_G.FirstHitOffset or 0.10)
+    end
+    
+    return delay
 end
 
 local function canBlock()
@@ -1853,6 +1868,9 @@ local function enemyIsAttacking(enemy)
     return enemy:GetAttribute("M1")==true
         or enemy:GetAttribute("M2")==true
         or enemy:GetAttribute("CombatAttacking")==true
+        or enemy:GetAttribute("Attacking")==true
+        or enemy:GetAttribute("isAttacking")==true
+        or enemy:GetAttribute("CombatM1")==true
 end
 
 local function enemyIsBlocking(enemy)
@@ -2304,50 +2322,40 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     if e_attacking then
         enemyLastAttacked[target] = now
-        -- Every time M1 goes false→true, register it as a new attack.
-        -- This is the CRITICAL fix: we always update enemyAttackStart on a fresh pulse,
-        -- even if a previous attack state still exists. This ensures hit 2, 3, 4 are tracked.
+        
+        -- Start tracking the attack
         if not prev_attacking then
             enemyAttackStart[target] = now
-            enemySkipped[target] = nil
-            enemyParryTriggered[target] = nil  -- Allow a fresh parry trigger
         end
         
-        -- BACKUP: Detect combo hits via M1Count attribute changes.
-        -- Some styles keep M1=true during the entire combo, so M1 never pulses false→true.
-        -- M1Count increments per hit, so we can catch new hits this way.
+        -- Detect combo hits (M1Count increments)
         local curM1Count = target:GetAttribute("M1Count") or target:GetAttribute("ComboCount") or 0
         local prevM1Count = enemyPrevM1Count[target] or curM1Count
         if curM1Count ~= prevM1Count then
-            enemyAttackStart[target] = now
-            enemySkipped[target] = nil
-            enemyParryTriggered[target] = nil
+            enemyAttackStart[target] = now -- Reset timer for the new hit!
         end
         enemyPrevM1Count[target] = curM1Count
+        
+        -- Fallback detection
+        if not enemyAttackStart[target] then
+            enemyAttackStart[target] = now
+        end
     else
-        -- Do not immediately clear attack state! Attack attributes in this game often pulse briefly.
-        -- We must keep the defense state alive until the parry window has fully passed.
-        if enemyAttackStart[target] then
-            if (now - enemyAttackStart[target]) > (temp_hitboxDelay + 0.6) then
-                enemyAttackStart[target] = nil
-                enemySkipped[target] = nil
-                enemyParryTriggered[target] = nil
-            end
+        -- Keep attack state alive briefly for the hitbox to finish
+        if enemyAttackStart[target] and (now - enemyAttackStart[target]) > (temp_hitboxDelay + 0.6) then
+            enemyAttackStart[target] = nil
         end
     end
     enemyPrevAttacking[target] = e_attacking
     
     local e_skill = enemyIsUsingSkill(target)
     if e_skill then
-        if not enemySkillStart[target] then
-            enemySkillStart[target] = now
-        end
+        if not enemySkillStart[target] then enemySkillStart[target] = now end
     else
         enemySkillStart[target] = nil
     end
     
     local elapsed = enemyAttackStart[target] and (now - enemyAttackStart[target]) or 0
-    local skillElapsed = enemySkillStart[target] and (now - enemySkillStart[target]) or 0
     
     local e_blocking = enemyIsBlocking(target)
     local e_stunned = enemyIsStunned(target)
@@ -2362,91 +2370,52 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     -- PRIORITY 1: PUNISH (Stunned Enemy)
     if AutoAttackEnabled and e_stunned and dist <= M1_RANGE then
         STATE = "PUNISH"
-        if isBlockingNow and now > parryEndTime then releaseBlock() end
+        if isBlockingNow then releaseBlock() end
         doM1()
         
-        -- Clear defense states to commit to attacking
         enemyAttackStart[target] = nil
-        enemySkipped[target] = nil
-        
         StateL.Text = "Status:  PUNISH COMBO"
         TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
         ActionL.Text = string.format("Combo Hit #%d", myComboCount)
         
-
     -- PRIORITY 2: DEFENSE (DODGE / BLOCK)
     elseif AutoParryEnabled and enemyAttackStart[target] and dist <= (e_isHeavy and (_G.HeavyParryRange or 20) or (_G.ParryRange or 12)) then
         
-        -- Stop attacking to ensure we can defend
         if weAreAttacking() then forceStopAttack() end
         
-        local isGuardBroken = char:GetAttribute("GuardBroken") == true
-        
-
-        if enemySkipped[target] then
-            -- AUTO-REARM: If we already parried but the enemy is STILL attacking,
-            -- they must be throwing another hit. Force re-arm the parry!
-            if e_attacking and elapsed > 0.08 then
-                enemyAttackStart[target] = now
-                enemySkipped[target] = nil
-                enemyParryTriggered[target] = nil
-            else
-                STATE = "WAIT_RESET"
-                -- Always release block if parry window expires to prevent "holding block"
-                if isBlockingNow and now > parryEndTime then releaseBlock() end
-                StateL.Text = "Status:  WAIT RESET"
-            end
-        end
-        
-        if not enemySkipped[target] then
+        -- AUTO DODGE HEAVY: Try to dash backwards instead of parrying!
+        if e_isHeavy and _G.AutoDodgeHeavyEnabled and doDodge(target) then
+            STATE = "DODGE"
+            enemyAttackStart[target] = nil -- Stop tracking to prevent spamming dash
+            StateL.Text = "Status: 🏃 DODGING HEAVY"
+            TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
+            ActionL.Text = "Auto Dodge (Q)!"
+        else
+            -- Existing parry logic (Fallback to parry if not heavy or dash is on cooldown)
             local pingStr = "0"
             pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
             local ping = (tonumber(pingStr) or 50) / 1000
             
-            local pingOffset = ping * 0.5
-            local userOffset = _G.ParryTimingOffset or 0
+            local idealTime = math.max(0.01, hitboxDelay - (ping * 0.5) + (_G.ParryTimingOffset or 0))
+            local holdDuration = _G.ParryHoldDuration or 0.35
             
-            -- Distance compensation: enemy further away = attack takes longer to arrive
-            local distanceDelay = math.clamp((dist - 8) * 0.025, 0, 0.4)
-            
-            -- Core timing: hitboxDelay - reactionSpeed - pingOffset + userOffset
-            local reactionSpeed = _G.ParryReactionSpeed or 0.15
-            local idealTime = math.max(0.01, hitboxDelay + distanceDelay - reactionSpeed - pingOffset + userOffset)
-            local expireTime = hitboxDelay + distanceDelay + (_G.ParryExpireWindow or 0.25)
-            
+            -- NEW CLEAN LOGIC: 
+            -- Before ideal time -> Wait (Drop guard if raised)
+            -- At ideal time -> Block
+            -- After hold duration -> Drop guard
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
-                if isBlockingNow and now > parryEndTime then releaseBlock() end
+                if isBlockingNow then releaseBlock() end
                 StateL.Text = string.format("Status: ️ TIMING (%.2fs)", idealTime - elapsed)
                 
-            elseif elapsed >= idealTime and elapsed < expireTime then
+            elseif elapsed >= idealTime and elapsed < (idealTime + holdDuration) then
                 STATE = "PARRY"
-                
-                -- The moment we hit idealTime, we trigger a Perfect Tap!
-                if enemyParryTriggered[target] ~= enemyAttackStart[target] then
-                    enemyParryTriggered[target] = enemyAttackStart[target]
-                    
-                    -- CRITICAL: If we are already blocking (e.g. from Hit 1), we MUST release it first!
-                    if isBlockingNow then
-                        releaseBlock()
-                    end
-                    
-                    doBlock()
-                    parryEndTime = now + (_G.ParryHoldDuration or 0.45)
-                end
-                
-                -- If tap duration is over, release block immediately!
-                if now > parryEndTime then
-                    if isBlockingNow then releaseBlock() end
-                    enemySkipped[target] = true -- Mark this attack as DONE!
-                end
-                
+                doBlock()
                 StateL.Text = "Status:  PERFECT PARRY (TAP)"
+                
             else
-                -- The window expired!
-                enemySkipped[target] = true 
                 STATE = "WAIT_RESET"
-                if isBlockingNow and now > parryEndTime then releaseBlock() end
+                if isBlockingNow then releaseBlock() end
                 StateL.Text = "Status:  PARRY DONE/MISSED"
             end
             
