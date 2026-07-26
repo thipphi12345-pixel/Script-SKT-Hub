@@ -1359,6 +1359,9 @@ end})
 
 Tab_Main:CreateSection("Auto Features")
 
+local AutoParryEnabled = false
+local AutoAttackEnabled = false
+
 local Toggle_AutoParry = Tab_Main:CreateToggle({Name = "️ Auto Parry (Block/Defend)", CurrentValue = false, Flag = "AutoParry", Callback = function(Value)
     AutoParryEnabled = Value
 end})
@@ -1962,9 +1965,17 @@ end
 
 local function doBlock()
     if not BlockModule or type(BlockModule.Block)~="function" then return false end
-    if isBlockingNow then return true end
     
     local c = LocalPlayer.Character
+    
+    -- Sync internal state with the actual game state!
+    -- If we think we are blocking, but we aren't in-game (e.g. guard broke, stunned, downed), force a fresh block!
+    if isBlockingNow and c and c:GetAttribute("Blocking") ~= true then
+        isBlockingNow = false 
+    end
+    
+    if isBlockingNow then return true end
+    
     if c and c:GetAttribute("Equip") ~= true then
         if EquipModule and type(EquipModule.Equip) == "function" then
             pcall(function() EquipModule.Equip() end)
@@ -2222,8 +2233,8 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
     
-    -- Auto Equip Fists (Only if attacking is enabled, so we don't randomly equip if just parrying)
-    if AutoAttackEnabled and char:GetAttribute("Equip") ~= true then
+    -- Auto Equip Fists (Required to be ready for both parrying and attacking!)
+    if (AutoAttackEnabled or AutoParryEnabled) and char:GetAttribute("Equip") ~= true then
         pcall(function()
             if EquipModule and type(EquipModule.Equip) == "function" then
                 EquipModule.Equip()
@@ -2258,7 +2269,6 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             char:SetAttribute("Running", false)
             char:SetAttribute("Sprinting", false)
         end)
-        if hum.WalkSpeed > 16 then hum.WalkSpeed = 16 end
         
         -- Handle LocalPlayer Movement options (WalkSpeed, JumpPower, Fly)
         local char = LocalPlayer.Character
@@ -2468,7 +2478,7 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         pcall(function()
             char:SetAttribute("Running", true)
             char:SetAttribute("Sprinting", true)
-            hum.WalkSpeed = 24
+            hum.WalkSpeed = math.max(28, _G.CustomWalkSpeed or 16)
         end)
         
         hum:MoveTo(targetRoot.Position)
@@ -3102,9 +3112,6 @@ table.insert(_G.GakuranHubConnections, game:GetService("RunService").RenderStepp
         local lookDir = (bestTarget.Position - myPos)
         if lookDir.Magnitude > 0.1 then
             lookDir = Vector3.new(lookDir.X, 0, lookDir.Z).Unit
-            
-            -- Fallback instant CFrame snap for real-time responsiveness (before AlignOrientation catches up)
-            char.HumanoidRootPart.CFrame = CFrame.lookAt(char.HumanoidRootPart.Position, char.HumanoidRootPart.Position + lookDir)
             
             -- Use AlignOrientation to hold the angle perfectly without physics stutter
             local align = char.HumanoidRootPart:FindFirstChild("FaceAttackerAlign")
