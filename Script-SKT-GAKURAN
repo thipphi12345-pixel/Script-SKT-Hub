@@ -1518,7 +1518,7 @@ Tab_ParrySettings:CreateSlider({
     Name = "Heavy Attack (R) Extra Delay",
     Range = {0, 0.5},
     Increment = 0.01,
-    CurrentValue = _G.HeavyDelayOffset or 0.2,
+    CurrentValue = _G.HeavyDelayOffset or 0.15,
     Flag = "Heavy_Delay_Settings",
     Callback = function(Value)
         _G.HeavyDelayOffset = Value
@@ -1549,26 +1549,26 @@ Tab_ParrySettings:CreateSlider({
     end,
 })
 
-_G.ParryHoldDuration = 0.45
+_G.ParryHoldDuration = 0.46
 Tab_ParrySettings:CreateSlider({
     Name = " Parry Hold Duration (ระยะเวลาค้างบล็อค)",
     Range = {0.15, 0.80},
     Increment = 0.01,
     Suffix = "s",
-    CurrentValue = 0.45,
+    CurrentValue = 0.46,
     Flag = "Parry_Hold_Duration",
     Callback = function(Value)
         _G.ParryHoldDuration = Value
     end,
 })
 
-_G.ParryExpireWindow = 0.25
+_G.ParryExpireWindow = 0.28
 Tab_ParrySettings:CreateSlider({
     Name = " Parry Expire Window (กรอบเวลาหมดอายุ)",
     Range = {0.10, 0.60},
     Increment = 0.01,
     Suffix = "s",
-    CurrentValue = 0.25,
+    CurrentValue = 0.28,
     Flag = "Parry_Expire_Window",
     Callback = function(Value)
         _G.ParryExpireWindow = Value
@@ -2019,14 +2019,24 @@ local function doHeavyAttack()
     
     lastM2Time = now
     
-    task.spawn(function()
-        pcall(function()
-            local vim = game:GetService("VirtualInputManager")
-            vim:SendKeyEvent(true, Enum.KeyCode.R, false, game)
-            task.wait(0.05)
-            vim:SendKeyEvent(false, Enum.KeyCode.R, false, game)
-        end)
+    -- Mobile-first support: Call the actual game module instead of relying on VIM keyboard simulation
+    pcall(function()
+        if M2Module and type(M2Module.OnM2Activated) == "function" then
+            M2Module.OnM2Activated()
+        end
     end)
+    
+    -- Fallback for PC users just in case the module needs extra inputs
+    if not UserInputService.TouchEnabled then
+        task.spawn(function()
+            pcall(function()
+                local vim = game:GetService("VirtualInputManager")
+                vim:SendKeyEvent(true, Enum.KeyCode.R, false, game)
+                task.wait(0.05)
+                vim:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+            end)
+        end)
+    end
     
     stats.m2s = stats.m2s + 1
     return true
@@ -2047,23 +2057,27 @@ local function doDodge(target)
         char.Humanoid:Move(awayVector, false)
     end
     
-    task.spawn(function()
-        pcall(function()
-            local vim = game:GetService("VirtualInputManager")
-            vim:SendKeyEvent(true, Enum.KeyCode.S, false, game)
-            task.wait(0.02)
-            vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-            task.wait(0.05)
-            vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-            vim:SendKeyEvent(false, Enum.KeyCode.S, false, game)
-        end)
-    end)
-    
+    -- Mobile-first support: Directly invoke the Evasive Module
     pcall(function()
         if EvasiveModule and type(EvasiveModule.Evasive) == "function" then
             EvasiveModule.Evasive()
         end
     end)
+    
+    -- PC Fallback
+    if not UserInputService.TouchEnabled then
+        task.spawn(function()
+            pcall(function()
+                local vim = game:GetService("VirtualInputManager")
+                vim:SendKeyEvent(true, Enum.KeyCode.S, false, game)
+                task.wait(0.02)
+                vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                task.wait(0.05)
+                vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                vim:SendKeyEvent(false, Enum.KeyCode.S, false, game)
+            end)
+        end)
+    end
     
     return true
 end
