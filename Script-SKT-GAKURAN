@@ -116,6 +116,7 @@ local enemyPrevAttacking = {}
 local enemyPrevM1Count = {}
 local enemySkillStart = {}
 local enemyLastAttacked = {}
+local enemyParryTriggered = {}
 local lockedTarget = nil
 local parryEndTime = 0
 
@@ -1369,6 +1370,16 @@ local Toggle_AutoAttack = Tab_Main:CreateToggle({Name = "️ Auto Attack (Combo/
     AutoAttackEnabled = Value
 end})
 
+_G.ParryZoneRadius = 6.5
+Tab_Main:CreateSlider({Name = " Parry Zone Radius", Range = {4, 15}, Increment = 0.5, Suffix = " studs", CurrentValue = 6.5, Flag = "ParryZoneRadius", Callback = function(Value)
+    _G.ParryZoneRadius = Value
+end})
+
+_G.ShowParryZone = true
+Tab_Main:CreateToggle({Name = " Show Parry Zone (Visualizer)", CurrentValue = true, Flag = "ShowParryZone", Callback = function(Value)
+    _G.ShowParryZone = Value
+end})
+
 
 _G.NoParryCooldown = false
 Tab_Main:CreateToggle({Name = " No Parry Cooldown", CurrentValue = false, Flag = "NoParryCooldown", Callback = function(Value)
@@ -2091,8 +2102,35 @@ local M2_RANGE = 7
 _G.ParryRange = _G.ParryRange or 12
 local CHASE_RANGE = 500
 
+local parryZoneVisualizer = nil
+
 -- // MAIN BRAIN //
 table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function()
+    
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        if _G.ShowParryZone and (AutoParryEnabled or AutoAttackEnabled) then
+            if not parryZoneVisualizer then
+                parryZoneVisualizer = Instance.new("Part")
+                parryZoneVisualizer.Name = "ParryZoneVisualizer"
+                parryZoneVisualizer.Shape = Enum.PartType.Cylinder
+                parryZoneVisualizer.Material = Enum.Material.ForceField
+                parryZoneVisualizer.Color = Color3.fromRGB(255, 50, 50)
+                parryZoneVisualizer.CanCollide = false
+                parryZoneVisualizer.Anchored = true
+                parryZoneVisualizer.CastShadow = false
+                parryZoneVisualizer.Parent = workspace
+            end
+            local r = _G.ParryZoneRadius or 6.5
+            parryZoneVisualizer.Size = Vector3.new(0.2, r * 2, r * 2)
+            parryZoneVisualizer.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, -char.HumanoidRootPart.Size.Y/2 - 1, 0) * CFrame.Angles(0, 0, math.pi/2)
+        else
+            if parryZoneVisualizer then parryZoneVisualizer:Destroy(); parryZoneVisualizer = nil end
+        end
+    else
+        if parryZoneVisualizer then parryZoneVisualizer:Destroy(); parryZoneVisualizer = nil end
+    end
+    
     if not AutoParryEnabled and not AutoAttackEnabled then
         if isBlockingNow then releaseBlock() end
         STATE = "IDLE"
@@ -2227,19 +2265,34 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
     
     if e_attacking then
         enemyLastAttacked[target] = now
-        -- Allow wireAnimator to handle combo timings if possible, 
-        -- but if this is the very first strike, log it.
-        if not prev_attacking and not enemyAttackStart[target] then
+        -- Every time M1 goes false→true, register it as a new attack.
+        -- This is the CRITICAL fix: we always update enemyAttackStart on a fresh pulse,
+        -- even if a previous attack state still exists. This ensures hit 2, 3, 4 are tracked.
+        if not prev_attacking then
             enemyAttackStart[target] = now
             enemySkipped[target] = nil
+            enemyParryTriggered[target] = nil  -- Allow a fresh parry trigger
         end
+        
+        -- BACKUP: Detect combo hits via M1Count attribute changes.
+        -- Some styles keep M1=true during the entire combo, so M1 never pulses false→true.
+        -- M1Count increments per hit, so we can catch new hits this way.
+        local curM1Count = target:GetAttribute("M1Count") or target:GetAttribute("ComboCount") or 0
+        local prevM1Count = enemyPrevM1Count[target] or curM1Count
+        if curM1Count ~= prevM1Count then
+            enemyAttackStart[target] = now
+            enemySkipped[target] = nil
+            enemyParryTriggered[target] = nil
+        end
+        enemyPrevM1Count[target] = curM1Count
     else
         -- Do not immediately clear attack state! Attack attributes in this game often pulse briefly.
         -- We must keep the defense state alive until the parry window has fully passed.
         if enemyAttackStart[target] then
-            if (now - enemyAttackStart[target]) > (temp_hitboxDelay + 0.3) then
+            if (now - enemyAttackStart[target]) > (temp_hitboxDelay + 0.6) then
                 enemyAttackStart[target] = nil
                 enemySkipped[target] = nil
+                enemyParryTriggered[target] = nil
             end
         end
     end
@@ -2292,32 +2345,56 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
         
 
         if enemySkipped[target] then
-            STATE = "WAIT_RESET"
-            -- Always release block if parry window expires to prevent "holding block"
-            if isBlockingNow and now > parryEndTime then releaseBlock() end
-            StateL.Text = "Status:  WAIT RESET"
-        else
-            -- SMART PARRY LOGIC (Ping Compensated, Distance Calculated & Multi-Hit Combo Support)
+            -- AUTO-REARM: If we already parried but the enemy is STILL attacking,
+            -- they must be throwing another hit. Force re-arm the parry!
+            if e_attacking and elapsed > 0.08 then
+                enemyAttackStart[target] = now
+                enemySkipped[target] = nil
+                enemyParryTriggered[target] = nil
+            else
+                STATE = "WAIT_RESET"
+                -- Always release block if parry window expires to prevent "holding block"
+                if isBlockingNow and now > parryEndTime then releaseBlock() end
+                StateL.Text = "Status:  WAIT RESET"
+            end
+        end
+        
+        if not enemySkipped[target] then
             local pingStr = "0"
             pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
             local ping = (tonumber(pingStr) or 50) / 1000
             
-            -- Adjust window based on ping and user offset
+            -- Simple, robust timing with Dynamic Distance Compensation
             local pingOffset = ping * 0.5
             local userOffset = _G.ParryTimingOffset or 0
-            local idealTime = math.max(0.01, hitboxDelay - 0.15 - pingOffset + userOffset)
+            
+            -- If the enemy is further away, the attack physically takes longer to travel.
+            local distanceDelay = math.clamp((dist - 7) * 0.04, 0, 0.6)
+            
+            -- We just use the raw hitboxDelay (from STYLE_DATA). No weird combo offsets.
+            local idealTime = math.max(0.01, hitboxDelay + distanceDelay - 0.15 - pingOffset + userOffset)
+            local expireTime = hitboxDelay + distanceDelay + 0.20
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
                 StateL.Text = string.format("Status: ️ TIMING (%.2fs)", idealTime - elapsed)
                 
-            elseif elapsed >= idealTime and elapsed < (hitboxDelay + 0.15) then
-                -- Block! (Tap block for 200ms)
+            elseif elapsed >= idealTime and elapsed < expireTime then
                 STATE = "PARRY"
-                if not isBlockingNow then 
-                    doBlock() 
-                    parryEndTime = now + 0.20
+                
+                -- The moment we hit idealTime, we trigger a Perfect Tap!
+                if enemyParryTriggered[target] ~= enemyAttackStart[target] then
+                    enemyParryTriggered[target] = enemyAttackStart[target]
+                    
+                    -- CRITICAL: If we are already blocking (e.g. from Hit 1), we MUST release it first!
+                    -- This simulates dropping the guard and instantly tapping it again for Hit 2!
+                    if isBlockingNow then
+                        releaseBlock()
+                    end
+                    
+                    doBlock()
+                    parryEndTime = now + 0.45 -- Hold block for 450ms to ensure the delayed hit is caught
                 end
                 
                 -- If tap duration is over, release block immediately!
@@ -2326,19 +2403,17 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                     enemySkipped[target] = true -- Mark this attack as DONE!
                 end
                 
-                StateL.Text = "Status:  M1 PARRY (TAP)"
-                
+                StateL.Text = "Status:  PERFECT PARRY (TAP)"
             else
-                -- If we missed or successfully parried (and the window expired), reset!
+                -- The window expired!
                 enemySkipped[target] = true 
-                stats.skips = stats.skips + 1
                 STATE = "WAIT_RESET"
                 if isBlockingNow and now > parryEndTime then releaseBlock() end
                 StateL.Text = "Status:  PARRY DONE/MISSED"
             end
             
             TargetL.Text = string.format("Target: %s [%.0fst]", target.Name, dist)
-            ActionL.Text = "Single Parry Logic"
+            ActionL.Text = "Ultimate Tap Parry"
         end
         
     -- PRIORITY 3: GUARD BREAK (HEAVY)
@@ -2430,8 +2505,13 @@ task.spawn(function()
                 local mc = LocalPlayer.Character
                 if mc and mc:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
                     if (character.HumanoidRootPart.Position - mc.HumanoidRootPart.Position).Magnitude <= 30 then
-                        enemyAttackStart[character] = os.clock()
-                        enemySkipped[character] = nil
+                        local clk = os.clock()
+                        -- Prevent double-firing from same animation frame
+                        if not enemyAttackStart[character] or (clk - enemyAttackStart[character] > 0.05) then
+                            enemyAttackStart[character] = clk
+                            enemySkipped[character] = nil
+                            enemyParryTriggered[character] = nil  -- Allow fresh parry
+                        end
                     end
                 end
             end
