@@ -1532,6 +1532,45 @@ Tab_ParrySettings:CreateSlider({
     end,
 })
 
+_G.ParryReactionSpeed = 0.15
+Tab_ParrySettings:CreateSlider({
+    Name = " Parry Reaction Speed (ความไวในการ Parry)",
+    Range = {0.05, 0.30},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.15,
+    Flag = "Parry_Reaction_Speed",
+    Callback = function(Value)
+        _G.ParryReactionSpeed = Value
+    end,
+})
+
+_G.ParryHoldDuration = 0.45
+Tab_ParrySettings:CreateSlider({
+    Name = " Parry Hold Duration (ระยะเวลาค้างบล็อค)",
+    Range = {0.15, 0.80},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.45,
+    Flag = "Parry_Hold_Duration",
+    Callback = function(Value)
+        _G.ParryHoldDuration = Value
+    end,
+})
+
+_G.ParryExpireWindow = 0.25
+Tab_ParrySettings:CreateSlider({
+    Name = " Parry Expire Window (กรอบเวลาหมดอายุ)",
+    Range = {0.10, 0.60},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.25,
+    Flag = "Parry_Expire_Window",
+    Callback = function(Value)
+        _G.ParryExpireWindow = Value
+    end,
+})
+
 for styleName, data in pairs(STYLE_DATA) do
     Tab_ParrySettings:CreateSlider({
         Name = string.upper(styleName) .. string.format(" M1 DELAY (Recommend: %.2f)", data.m1),
@@ -2364,16 +2403,16 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
             pcall(function() pingStr = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+") end)
             local ping = (tonumber(pingStr) or 50) / 1000
             
-            -- Simple, robust timing with Dynamic Distance Compensation
             local pingOffset = ping * 0.5
             local userOffset = _G.ParryTimingOffset or 0
             
-            -- If the enemy is further away, the attack physically takes longer to travel.
-            local distanceDelay = math.clamp((dist - 7) * 0.04, 0, 0.6)
+            -- Distance compensation: enemy further away = attack takes longer to arrive
+            local distanceDelay = math.clamp((dist - 8) * 0.025, 0, 0.4)
             
-            -- We just use the raw hitboxDelay (from STYLE_DATA). No weird combo offsets.
-            local idealTime = math.max(0.01, hitboxDelay + distanceDelay - 0.15 - pingOffset + userOffset)
-            local expireTime = hitboxDelay + distanceDelay + 0.20
+            -- Core timing: hitboxDelay - reactionSpeed - pingOffset + userOffset
+            local reactionSpeed = _G.ParryReactionSpeed or 0.15
+            local idealTime = math.max(0.01, hitboxDelay + distanceDelay - reactionSpeed - pingOffset + userOffset)
+            local expireTime = hitboxDelay + distanceDelay + (_G.ParryExpireWindow or 0.25)
             
             if elapsed < idealTime then
                 STATE = "WAIT_PARRY"
@@ -2388,13 +2427,12 @@ table.insert(_G.GakuranHubConnections, RunService.RenderStepped:Connect(function
                     enemyParryTriggered[target] = enemyAttackStart[target]
                     
                     -- CRITICAL: If we are already blocking (e.g. from Hit 1), we MUST release it first!
-                    -- This simulates dropping the guard and instantly tapping it again for Hit 2!
                     if isBlockingNow then
                         releaseBlock()
                     end
                     
                     doBlock()
-                    parryEndTime = now + 0.45 -- Hold block for 450ms to ensure the delayed hit is caught
+                    parryEndTime = now + (_G.ParryHoldDuration or 0.45)
                 end
                 
                 -- If tap duration is over, release block immediately!
