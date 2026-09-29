@@ -1,0 +1,3138 @@
+--[[
+    ==============================================================================
+    SKT HUB — OPEN SEA FOR ANIMALS
+    UI Engine: SKTHubUI (Int3UI) — loadstring(readfile("SKTHubUI.lua"))
+    Ported from "2K Script" (Fluent) — all automation logic preserved.
+    ==============================================================================
+]]
+
+-- ── 1. STRICT AUTO-CLEANUP ───────────────────────────────────────────────────────
+if _G.OpenSeaCleanup then pcall(_G.OpenSeaCleanup) end
+if _G.SKTMobileToggleBtn then pcall(function() _G.SKTMobileToggleBtn:Destroy() end) end
+_G.OpenSeaRunning = false
+
+-- Immediate Dumbbell & Training Cleanup on Re-run
+pcall(function()
+    local char = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character
+    if char then
+        char:SetAttribute("DumbbellModel", nil)
+        char:SetAttribute("IsTrainingLocal", nil)
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+                local nm = t.Name:lower()
+                local id = (t.Animation and t.Animation.AnimationId or ""):lower()
+                if nm:find("train") or nm:find("dumb") or id:find("train") or id:find("dumb") then
+                    t:Stop()
+                end
+            end
+            if hum.WalkSpeed == 0 then hum.WalkSpeed = 16 end
+        end
+    end
+    if game:GetService("Players").LocalPlayer then
+        game:GetService("Players").LocalPlayer:SetAttribute("IsTrainingLocal", nil)
+    end
+end)
+
+-- Purge leftover ScreenGuis from previous runs (old 2K/Fluent builds + old toggle)
+pcall(function()
+    local CoreGui = game:GetService("CoreGui")
+    local gethui = gethui or function() return CoreGui end
+    local targets = { CoreGui, gethui() }
+    for _, parent in ipairs(targets) do
+        if parent then
+            for _, c in ipairs(parent:GetChildren()) do
+                if c:IsA("ScreenGui") and (c.Name == "OpenSeaMiniButton_2K" or c.Name == "Fluent" or c.Name == "SKTHub_FloatingToggle") then
+                    pcall(function() c:Destroy() end)
+                end
+            end
+        end
+    end
+end)
+
+local HttpService       = game:GetService("HttpService")
+local RunService        = game:GetService("RunService")
+local Players           = game:GetService("Players")
+local RS                = game:GetService("ReplicatedStorage")
+local CoreGui           = game:GetService("CoreGui")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local VirtualUser       = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService   = game:GetService("TeleportService")
+local Lighting          = game:GetService("Lighting")
+
+-- Executor HTTP bridge (Discord webhooks & server list API)
+local httpRequest = (typeof(syn) == "table" and syn.request) or http_request or request
+    or (typeof(fluxus) == "table" and fluxus.request) or (typeof(http) == "table" and http.request)
+
+local thisRunId         = HttpService:GenerateGUID(false)
+_G.OpenSeaRunId         = thisRunId
+_G.OpenSeaRunning       = true
+
+local _conns = {}
+
+-- ── 2. LOAD SKT HUB UI LIBRARY ──────────────────────────────────────────────────
+local Library, ThemeManager, SaveManager, Toggles, Options
+do
+    local chunk, lastErr
+    for _, path in ipairs({
+        "SKTHubUI.lua",
+        "SKTHub/SKTHubUI.lua",
+        "skt/SKTHubUI.lua",
+        "workspace/SKTHubUI.lua",
+        "MapDump_Open_Sea_For_Animals_88047783411976/SKTHubUI.lua",
+    }) do
+        if typeof(isfile) == "function" and typeof(readfile) == "function" and isfile(path) then
+            local ok, res = pcall(readfile, path)
+            if ok and type(res) == "string" and #res > 0 then
+                chunk, lastErr = loadstring(res, "@SKTHubUI")
+                if chunk then break end
+            end
+        end
+    end
+    if not chunk then
+        error("[SKT Hub] SKTHubUI.lua not found — place it in your executor workspace folder and re-run (" .. tostring(lastErr or "not found") .. ")")
+    end
+    Library, ThemeManager, SaveManager, Toggles, Options = chunk()
+end
+
+-- Legacy shims so ported game logic stays identical to the old build
+local function Notify(t)
+    t = t or {}
+    pcall(function()
+        Library:Notify({
+            Title       = t.Title or "SKT Hub",
+            Description = t.Content or t.Description or t.Text or "",
+            Time        = t.Duration or t.Time or 4,
+            Type        = t.Type or "Info",
+        })
+    end)
+end
+local Fluent = { Notify = function(_, t) Notify(t) end }
+
+-- Read-through view: UIControls.X resolves to Options.X / Toggles.X
+local UIControls = setmetatable({}, {
+    __index = function(_, k) return Options[k] or Toggles[k] end,
+    __newindex = function() end,
+})
+
+_G.OpenSeaCleanup = function()
+    _G.OpenSeaRunning = false
+    _G.OpenSeaRunId   = nil
+    for _, c in ipairs(_conns) do pcall(function() c:Disconnect() end) end
+    table.clear(_conns)
+    if _G.SKTFpsRestore then pcall(_G.SKTFpsRestore) end
+    if Library then pcall(function() Library:Unload() end) end
+    if _G.SKTMobileToggleBtn then
+        pcall(function() _G.SKTMobileToggleBtn:Destroy() end)
+        _G.SKTMobileToggleBtn = nil
+    end
+    pcall(function()
+        local char = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character
+        if char then
+            char:SetAttribute("DumbbellModel", nil)
+            char:SetAttribute("IsTrainingLocal", nil)
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed == 0 then hum.WalkSpeed = 16 end
+        end
+        if game:GetService("Players").LocalPlayer then
+            game:GetService("Players").LocalPlayer:SetAttribute("IsTrainingLocal", nil)
+        end
+    end)
+end
+Library:OnUnload(function() _G.OpenSeaRunning = false end)
+
+-- ── 3. SERVICES, KNIT & REPLICATED STORAGE ───────────────────────────────────────
+local LP = Players.LocalPlayer
+while not LP do
+    task.wait(0.05)
+    LP = Players.LocalPlayer
+end
+
+local Knit = require(RS:WaitForChild("Packages"):WaitForChild("Knit"))
+
+local KnitServicesFolder = RS:WaitForChild("Packages"):WaitForChild("_Index"):FindFirstChild("sleitnick_knit@1.7.0")
+    and RS.Packages._Index["sleitnick_knit@1.7.0"].knit:FindFirstChild("Services")
+
+local function getServiceWrapper(sName)
+    local knitProxy = nil
+    pcall(function() knitProxy = Knit.GetService(sName) end)
+    local sFolder = KnitServicesFolder and KnitServicesFolder:FindFirstChild(sName)
+    local rfFolder = sFolder and sFolder:FindFirstChild("RF")
+    local reFolder = sFolder and sFolder:FindFirstChild("RE")
+
+    local wrapper = { RF = {}, RE = {} }
+
+    setmetatable(wrapper, {
+        __index = function(_, key)
+            if knitProxy and knitProxy[key] then
+                return function(self, ...)
+                    return knitProxy[key](knitProxy, ...)
+                end
+            end
+            if rfFolder and rfFolder:FindFirstChild(key) then
+                return function(self, ...)
+                    return rfFolder[key]:InvokeServer(...)
+                end
+            end
+            if reFolder and reFolder:FindFirstChild(key) then
+                return function(self, ...)
+                    return reFolder[key]:FireServer(...)
+                end
+            end
+            return nil
+        end
+    })
+
+    if rfFolder then
+        setmetatable(wrapper.RF, {
+            __index = function(_, key)
+                local rf = rfFolder:FindFirstChild(key)
+                return rf
+            end
+        })
+    end
+
+    if reFolder then
+        setmetatable(wrapper.RE, {
+            __index = function(_, key)
+                local re = reFolder:FindFirstChild(key)
+                return re
+            end
+        })
+    end
+
+    return wrapper
+end
+
+local WaveService            = getServiceWrapper("WaveService")
+local EggService             = getServiceWrapper("EggService")
+local AnimalService          = getServiceWrapper("AnimalService")
+local TrainingService        = getServiceWrapper("TrainingService")
+local PickaxeService         = getServiceWrapper("PickaxeService")
+local UpgradesService        = getServiceWrapper("UpgradesService")
+local RebirthService         = getServiceWrapper("RebirthService")
+local PlaytimeRewardService  = getServiceWrapper("PlaytimeRewardService")
+local DailyRewardService     = getServiceWrapper("DailyRewardService")
+local FreeShopService        = getServiceWrapper("FreeShopService")
+local SpinWheelService       = getServiceWrapper("SpinWheelService")
+local RewardService          = getServiceWrapper("RewardService")
+local PlotService            = getServiceWrapper("PlotService")
+local InventoryService       = getServiceWrapper("InventoryService")
+local SeasonPassService      = getServiceWrapper("SeasonPassService")
+local QuestService           = getServiceWrapper("QuestService")
+local PotionService          = getServiceWrapper("PotionService")
+local CodesService           = getServiceWrapper("CodesService")
+local GiftingService         = getServiceWrapper("GiftingService")
+
+local ReplicaController      = Knit.GetController("ReplicaController")
+local TrainingController     = Knit.GetController("TrainingController")
+local WaveController         = Knit.GetController("WaveController")
+local PickupController       = Knit.GetController("PickupController")
+local GiftPopupController    = nil
+pcall(function() GiftPopupController = Knit.GetController("GiftPopupController") end)
+local PlaytimeRewardController = nil
+pcall(function() PlaytimeRewardController = Knit.GetController("PlaytimeRewardController") end)
+
+local TrainToolConfig        = nil
+pcall(function() TrainToolConfig = require(RS.Configs.TrainToolConfig) end)
+local StaffConfig            = nil
+pcall(function() StaffConfig = require(RS.Configs.StaffConfig) end)
+local UpgradeConfig          = nil
+pcall(function() UpgradeConfig = require(RS.Configs.UpgradeConfig) end)
+local RebirthConfig          = nil
+pcall(function() RebirthConfig = require(RS.Configs.RebirthConfig) end)
+local PlaytimeRewardConfig   = nil
+pcall(function() PlaytimeRewardConfig = require(RS.Configs.PlaytimeRewardConfig) end)
+local FreeShopConfig         = nil
+pcall(function() FreeShopConfig = require(RS.Configs.FreeShopConfig) end)
+local SpinWheelConfig        = nil
+pcall(function() SpinWheelConfig = require(RS.Configs.SpinWheelConfig) end)
+local SeasonPassConfig       = nil
+pcall(function() SeasonPassConfig = require(RS.Configs.SeasonPassConfig) end)
+local PotionsConfig          = nil
+pcall(function() PotionsConfig = require(RS.Configs.PotionsConfig) end)
+local DailyRewardConfig      = nil
+pcall(function() DailyRewardConfig = require(RS.Configs.DailyRewardConfig) end)
+local Modifiers              = nil
+pcall(function() Modifiers = require(RS.Modifiers) end)
+local PlotUtils              = nil
+pcall(function() PlotUtils = require(RS.GameShared.PlotUtils) end)
+local AbbreviationUtils      = nil
+pcall(function() AbbreviationUtils = require(RS.Shared.AbbreviationUtils) end)
+
+-- ── 4. STATE & SETTINGS ──────────────────────────────────────────────────────────
+local State = {
+    -- Sea Wave & Egg Farming
+    AutoWave            = false,
+    MinEggRarity        = {},
+    SpecificEggs        = {},
+    PrioritizeMutations = false,
+    WaveDelay           = 2,
+    AutoHatchEggs       = false,
+    AutoSellSpecificEgg = false,
+    SellEggRarities     = { "All Common - Rare" },
+    AutoEquipBest       = false,
+    AutoSellAnimals     = false,
+    AutoHuntEventBoss   = false,
+    AutoOfflineCash     = false,
+    VacuumEggs          = true,
+
+    -- Bulk Trading & Gifting
+    AutoAcceptGifts     = false,
+    TradeTargetPlayer   = "",
+    TradeFilterAnimal   = "All Animals",
+    TradeQuantity       = 10,
+    TradeSpeedDelay     = 0.05,
+    TradeInstantBurst   = false,
+
+    -- Power & Gear
+    AutoTrain           = false,
+    AutoClaimBonus      = false,
+    AutoBuyDumbbell     = false,
+    AutoBuyStaff        = false,
+
+    -- Upgrades & Rebirth
+    AutoUpgradePlot     = false,
+    AutoUpgradeSpeed    = false,
+    AutoUpgradeCarry    = false,
+    AutoRebirth         = false,
+    TargetRebirth       = "Unlimited / Max",
+
+    -- Free Rewards, Quests & Potions
+    AutoPlaytimeGifts   = false,
+    AutoDailyRewards    = false,
+    AutoFreeShop        = false,
+    AutoSpinWheel       = false,
+    AutoGroupReward     = false,
+    AutoSeasonPass      = false,
+    AutoQuests          = false,
+    AutoRedeemCodes     = false,
+    AutoUsePotions      = false,
+    AutoPotions         = {},
+
+    -- Misc & Anti-AFK
+    AntiAFK             = true,
+    FPSBoost            = false,
+    CustomSpeedEnabled  = false,
+    CustomSpeedValue    = 46,
+
+    -- Discord Webhook Alerts & Server Tools
+    WebhookAlerts       = false,
+    WebhookURL          = "",
+    WebhookRareEggs     = true,
+    WebhookMinRarity    = "Secret+ (Ostrich+)",
+    WebhookBossAlerts   = true,
+
+    -- Config persistence
+    CfgAutosave         = true,
+}
+_G.OpenSeaState = State
+
+-- ── 5. UTILITY FUNCTIONS ─────────────────────────────────────────────────────────
+local function formatNum(n)
+    if not n or type(n) ~= "number" then return "0" end
+    if n >= 1e12 then return string.format("%.2fT", n / 1e12) end
+    if n >= 1e9  then return string.format("%.2fB", n / 1e9) end
+    if n >= 1e6  then return string.format("%.2fM", n / 1e6) end
+    if n >= 1e3  then return string.format("%.1fK", n / 1e3) end
+    return string.format("%.0f", n)
+end
+
+local function formatSeconds(sec)
+    if not sec or sec <= 0 then return "00:00" end
+    local m = math.floor(sec / 60)
+    local s = math.floor(sec % 60)
+    if m >= 60 then
+        local h = math.floor(m / 60)
+        m = m % 60
+        return string.format("%02d:%02d:%02d", h, m, s)
+    end
+    return string.format("%02d:%02d", m, s)
+end
+
+local function getChar()
+    return LP.Character
+end
+
+local function getHum()
+    local char = getChar()
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function getHRP()
+    local char = getChar()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getMyPlotModel()
+    if PlotUtils and PlotUtils.GetPlayerPlot then
+        local p = PlotUtils.GetPlayerPlot(LP)
+        if p then return p end
+    end
+    local ok, plotId = pcall(function()
+        return PlotService.RF.GetMyPlotId:InvokeServer()
+    end)
+    if ok and plotId then
+        local p = workspace:WaitForChild("Plots"):FindFirstChild(tostring(plotId))
+        if p then
+            local inner = p:FindFirstChild(tostring(plotId))
+            if inner then return inner end
+            return p
+        end
+    end
+    -- Fallback scan
+    for _, p in ipairs(workspace.Plots:GetChildren()) do
+        if p:GetAttribute("Owner") == LP.UserId then
+            local m = p:FindFirstChild(p.Name)
+            if m then return m end
+            return p
+        end
+    end
+    return nil
+end
+
+local function getMyPlotSurface()
+    local plot = getMyPlotModel()
+    if plot then
+        return plot:FindFirstChild("PlotSurface", true)
+    end
+    return nil
+end
+
+local function safeTeleport(cframe)
+    pcall(function()
+        local char = LP.Character
+        if char and char.PrimaryPart then
+            char:PivotTo(cframe)
+        end
+    end)
+end
+
+local function clearNotificationSpam()
+    pcall(function()
+        local notifList = LP.PlayerGui:FindFirstChild("NotificationGui") and LP.PlayerGui.NotificationGui:FindFirstChild("NotificationList")
+        if notifList then
+            for _, c in ipairs(notifList:GetChildren()) do
+                if c:IsA("GuiObject") and c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" and not c.Name:lower():find("template") then
+                    local lbl = c:FindFirstChildOfClass("TextLabel")
+                    if lbl and (lbl.Text:find("maximum") or lbl.Text:find("already claimed") or lbl.Text:find("wait a little bit") or lbl.Text:find("offline")) then
+                        c.Visible = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ── 6. CORE AUTOMATION LOGIC ─────────────────────────────────────────────────────
+
+local EggRarityRanks = {
+    ["Common"]    = 1,
+    ["Uncommon"]  = 2,
+    ["Rare"]      = 3,
+    ["Epic"]      = 4,
+    ["Legendary"] = 5,
+    ["Mythic"]    = 6,
+    ["Divine"]    = 7,
+    ["Secret"]    = 8,
+    ["Cosmic"]    = 9,
+    ["Eternal"]   = 10,
+    ["SPECIAL"]   = 11,
+    ["CYBER"]     = 12,
+    ["LAW"]       = 13,
+    ["Titanium"]  = 14,
+    ["Magical"]   = 15,
+    ["Nightfall"] = 16,
+    ["Frosty"]    = 17,
+    ["Lightning"] = 18,
+}
+
+local ALL_RARITY_NAMES = {
+    "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine",
+    "Secret", "Cosmic", "Eternal", "SPECIAL", "CYBER", "LAW", "Titanium",
+    "Magical", "Nightfall", "Frosty", "Lightning",
+}
+
+local EggToRarity = {
+    ["basic_egg"]     = "Common",
+    ["frogs_egg"]     = "Uncommon",
+    ["bats_egg"]      = "Rare",
+    ["tigers_egg"]    = "Epic",
+    ["trex_egg"]      = "Legendary",
+    ["snails_egg"]    = "Mythic",
+    ["capybara_egg"]  = "Divine",
+    ["osctrich_egg"]  = "Secret",
+    ["snake_egg"]     = "Cosmic",
+    ["sphinx_egg"]    = "Eternal",
+    ["mouse_egg"]     = "Eternal",
+    ["dragon_egg"]    = "SPECIAL",
+    ["polarbear_egg"] = "SPECIAL",
+    ["seal_egg"]      = "SPECIAL",
+    ["gorilla_egg"]   = "CYBER",
+    ["mamut_egg"]     = "LAW",
+    ["ocean_egg"]     = "Titanium",
+    ["deer_egg"]      = "Magical",
+    ["sleepy_egg"]    = "Nightfall",
+    ["glacial_egg"]   = "Frosty",
+    ["volt_egg"]      = "Lightning",
+    ["flame_egg"]     = "SPECIAL",
+    ["angelic_egg"]   = "SPECIAL",
+    ["unicorn_egg"]   = "SPECIAL",
+    ["talon_egg"]     = "SPECIAL",
+}
+
+local MinRarityThresholds = {
+    ["All Eggs (Common+)"]                  = 1,
+    ["Uncommon+ (Frog+)"]                   = 2,
+    ["Rare+ (Bat+)"]                        = 3,
+    ["Epic+ (Tiger+)"]                      = 4,
+    ["Legendary+ (Trex+)"]                  = 5,
+    ["Mythic+ (Snails+)"]                   = 6,
+    ["Divine+ (Capybara+)"]                 = 7,
+    ["Secret+ (Ostrich+)"]                  = 8,
+    ["Cosmic+ (Snake+)"]                    = 9,
+    ["Eternal+ (Sphinx+)"]                  = 10,
+    ["SPECIAL+ (Dragon / Polarbear+)"]      = 11,
+    ["CYBER+ (Gorilla+)"]                   = 12,
+    ["LAW+ (Mamut+)"]                       = 13,
+    ["Titanium+ (Ocean+)"]                  = 14,
+    ["Magical+ (Corals+)"]                  = 15,
+    ["Nightfall+ (Sleepy+)"]                = 16,
+    ["Frosty+ (Glacial+)"]                  = 17,
+    ["Lightning+ (Volt+)"]                  = 18,
+}
+
+local EggNameMapping = {
+    ["Basic Egg"]     = "basic_egg",
+    ["Frog Egg"]      = "frogs_egg",
+    ["Bat Egg"]       = "bats_egg",
+    ["Tiger Egg"]     = "tigers_egg",
+    ["Trex Egg"]      = "trex_egg",
+    ["Snails Egg"]    = "snails_egg",
+    ["Capybara Egg"]  = "capybara_egg",
+    ["Osctrich Egg"]  = "osctrich_egg",
+    ["Snake Egg"]     = "snake_egg",
+    ["Sphinx Egg"]    = "sphinx_egg",
+    ["Dragon Egg"]    = "dragon_egg",
+    ["Mouse Egg"]     = "mouse_egg",
+    ["Polarbear Egg"] = "polarbear_egg",
+    ["Seal Egg"]      = "seal_egg",
+    ["Gorilla Egg"]   = "gorilla_egg",
+    ["Mamut Egg"]     = "mamut_egg",
+    ["Ocean Egg"]     = "ocean_egg",
+    ["Corals Egg"]    = "deer_egg",
+    ["Sleepy Egg"]    = "sleepy_egg",
+    ["Glacial Egg"]   = "glacial_egg",
+    ["Volt Egg"]      = "volt_egg",
+    ["Flame Egg"]     = "flame_egg",
+    ["Angelic Egg"]   = "angelic_egg",
+    ["Unicorn Egg"]   = "unicorn_egg",
+    ["Talon Egg"]     = "talon_egg",
+}
+
+local ALL_EGG_DISPLAY_NAMES = {
+    "Basic Egg",
+    "Frog Egg",
+    "Bat Egg",
+    "Tiger Egg",
+    "Trex Egg",
+    "Snails Egg",
+    "Capybara Egg",
+    "Osctrich Egg",
+    "Snake Egg",
+    "Sphinx Egg",
+    "Dragon Egg",
+    "Mouse Egg",
+    "Polarbear Egg",
+    "Seal Egg",
+    "Gorilla Egg",
+    "Mamut Egg",
+    "Ocean Egg",
+    "Corals Egg",
+    "Sleepy Egg",
+    "Glacial Egg",
+    "Volt Egg",
+    "Flame Egg",
+    "Angelic Egg",
+    "Unicorn Egg",
+    "Talon Egg"
+}
+
+-- 1. Wave Egg Sniping & Teleport Collector
+local isSnipingWave = false
+local function runWaveSniping()
+    if not State.AutoWave or isSnipingWave then return end
+    if not WaveService then return end
+    if LP:GetAttribute("IsWaveActive") then return end
+
+    local char = LP.Character
+    if not char or not char.PrimaryPart then return end
+
+    isSnipingWave = true
+    task.spawn(function()
+        pcall(function()
+            -- Pure Silent Packet Sniping Mode
+            local ok, res = pcall(function()
+                return WaveService.RF.Start:InvokeServer(5)
+            end)
+            if ok and res and res.spawns then
+                local spawns = res.spawns
+                local picks = {}
+                local acceptedRanks = nil
+                if type(State.MinEggRarity) == "table" and #State.MinEggRarity > 0 then
+                    acceptedRanks = {}
+                    for _, rn in ipairs(State.MinEggRarity) do
+                        local r = EggRarityRanks[rn]
+                        if r then acceptedRanks[r] = true end
+                    end
+                elseif type(State.MinEggRarity) == "string" then
+                    local minRank = MinRarityThresholds[State.MinEggRarity] or 1
+                    acceptedRanks = {}
+                    for rn, r in pairs(EggRarityRanks) do
+                        if r >= minRank then acceptedRanks[r] = true end
+                    end
+                end
+                local specificSet = nil
+                if type(State.SpecificEggs) == "table" then
+                    for _, nm in ipairs(State.SpecificEggs) do
+                        local eid = EggNameMapping[nm]
+                        if eid then
+                            specificSet = specificSet or {}
+                            specificSet[eid] = true
+                        end
+                    end
+                end
+
+                for id, sData in pairs(spawns) do
+                    local entity = sData.entity or {}
+                    local eggType = entity.eggType
+                    if eggType then
+                        local rarityName = EggToRarity[eggType] or "Common"
+                        local rank = EggRarityRanks[rarityName] or 1
+                        local mutation = entity.mutation
+                        local size = entity.size
+                        local isBoss = (sData.bossId ~= nil) or (eggType == "dragon_egg" or eggType == "polarbear_egg" or eggType == "mouse_egg")
+
+                        local matchSpecific = (specificSet == nil or specificSet[eggType] == true)
+                        local matchRarity = (acceptedRanks == nil or acceptedRanks[rank] == true)
+
+                        if matchSpecific and matchRarity then
+                            local score = rank * 10000
+                            if isBoss then
+                                score = score + (State.AutoHuntEventBoss and 200000 or 50000)
+                            end
+                            if mutation and mutation ~= "NORMAL" then
+                                score = score + (State.PrioritizeMutations and 30000 or 5000)
+                            end
+                            if size == "huge" then score = score + 20000
+                            elseif size == "big" then score = score + 10000 end
+
+                            table.insert(picks, { id = id, score = score })
+                        end
+                    elseif State.VacuumEggs and (sData.bossId ~= nil or entity.brainrotType ~= nil) then
+                        -- vacuum also grabs boss drops and animal spawns, not just eggs
+                        table.insert(picks, { id = id, score = sData.bossId ~= nil and 250000 or 0 })
+                    end
+                end
+
+                if #picks > 0 then
+                    table.sort(picks, function(a, b) return a.score > b.score end)
+                    local ids = {}
+                    local limit = State.VacuumEggs and 30 or 1
+                    for i = 1, math.min(limit, #picks) do
+                        ids[i] = picks[i].id
+                    end
+                    task.wait(0.08)
+                    pcall(function()
+                        WaveService.RF.Finished:InvokeServer(ids)
+                    end)
+                else
+                    pcall(function()
+                        WaveService.RF.Finished:InvokeServer({})
+                    end)
+                end
+            end
+        end)
+
+        task.wait(State.WaveDelay or 2)
+        isSnipingWave = false
+    end)
+end
+
+-- 2. Egg & Animal Plot Manager
+local lastEquipBestTime = 0
+local lastEggFullTime = 0
+
+local function sellSelectedEggs()
+    local selection = State.SellEggRarities
+    if type(selection) ~= "table" or #selection == 0 then
+        selection = { "All Common - Rare" }
+    end
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Inventory then return 0 end
+
+    local soldCount = 0
+
+    for id, it in pairs(data.Inventory) do
+        if it.itemType == "Egg" and it.innerEntity and it.innerEntity.eggType then
+            local eggType = it.innerEntity.eggType
+            local eggRarity = EggToRarity[eggType] or "Common"
+            local eggRank = EggRarityRanks[eggRarity] or 1
+            local shouldSell = false
+
+            for _, opt in ipairs(selection) do
+                local hi = opt:match("^All Common %- (%w+)$")
+                if hi then
+                    if eggRank <= (EggRarityRanks[hi] or 3) then
+                        shouldSell = true
+                        break
+                    end
+                else
+                    local rname = opt:match("^(%w+)")
+                    if rname and rname:upper() == eggRarity:upper() then
+                        shouldSell = true
+                        break
+                    end
+                end
+            end
+
+            if shouldSell then
+                local ok = pcall(function()
+                    InventoryService.RF.SellEgg:InvokeServer(id)
+                end)
+                if ok then
+                    soldCount = soldCount + 1
+                end
+                task.wait(0.05)
+            end
+        end
+    end
+    return soldCount
+end
+
+local function handleEggsAndAnimals()
+    local data = nil
+    pcall(function()
+        data = ReplicaController:GetPlayerData()
+    end)
+    if not data then return end
+
+    -- Auto sell selected eggs
+    if State.AutoSellSpecificEgg then
+        sellSelectedEggs()
+    end
+
+    -- Place Eggs from Inventory onto Plot (with Max Limit Guard & Backoff)
+    if State.AutoHatchEggs and data.Inventory and (os.clock() - lastEggFullTime > 20) then
+        local placedEggsCount = 0
+        if data.PlacedEggs then
+            for _ in pairs(data.PlacedEggs) do
+                placedEggsCount = placedEggsCount + 1
+            end
+        end
+
+        if placedEggsCount >= 10 then
+            lastEggFullTime = os.clock()
+        else
+            local surface = getMyPlotSurface()
+            if surface then
+                for id, it in pairs(data.Inventory) do
+                    if it.itemType == "Egg" or (it.innerEntity and it.innerEntity.eggType) then
+                        local rx = math.random(-15, 15)
+                        local rz = math.random(-15, 15)
+                        local targetCF = surface.CFrame * CFrame.new(rx, 1.5, rz)
+                        local ok, res = pcall(function()
+                            return EggService.RF.PlaceEgg:InvokeServer(id, targetCF)
+                        end)
+                        if ok and res == false then
+                            lastEggFullTime = os.clock()
+                            break
+                        end
+                        placedEggsCount = placedEggsCount + 1
+                        if placedEggsCount >= 10 then
+                            lastEggFullTime = os.clock()
+                            break
+                        end
+                        task.wait(0.05)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Hatch Placed Eggs from Plot
+    if State.AutoHatchEggs then
+        local plot = getMyPlotModel()
+        local eggsFolder = plot and plot:FindFirstChild("Eggs", true)
+        if eggsFolder then
+            local now = workspace:GetServerTimeNow()
+            for _, eggModel in ipairs(eggsFolder:GetChildren()) do
+                local duration = eggModel:GetAttribute("Duration") or 120
+                local startTime = eggModel:GetAttribute("StartTime") or 0
+                local eggId = eggModel:GetAttribute("EggId")
+                if eggId and (startTime + duration) <= now then
+                    pcall(function()
+                        EggService.RF.HatchEgg:InvokeServer(eggId)
+                    end)
+                    task.wait(0.05)
+                end
+            end
+        end
+    end
+
+    -- Equip Best (Rate limited to avoid spamming server)
+    if State.AutoEquipBest then
+        local now = os.clock()
+        if (now - lastEquipBestTime) >= 15 then
+            lastEquipBestTime = now
+            pcall(function()
+                AnimalService.RF.EquipBest:InvokeServer()
+            end)
+        end
+    end
+
+    -- Auto Sell Unused Animals from Inventory
+    if State.AutoSellAnimals and data.Inventory then
+        local hasUnusedAnimal = false
+        for id, it in pairs(data.Inventory) do
+            if it.itemType == "Brainrot" or (it.innerEntity and it.innerEntity.brainrotType) then
+                hasUnusedAnimal = true
+                break
+            end
+        end
+        if hasUnusedAnimal then
+            pcall(function()
+                AnimalService.RF.EquipBest:InvokeServer()
+                task.wait(0.2)
+                InventoryService.RF.SellAllBrainrots:InvokeServer()
+            end)
+        end
+    end
+
+    -- Collect Offline Cash
+    if State.AutoOfflineCash then
+        pcall(function()
+            AnimalService.RF.CollectOfflineCash:InvokeServer()
+        end)
+    end
+end
+
+-- 3. Dumbbell & Gear Auto Purchaser
+local function buyBestDumbbell()
+    if not State.AutoBuyDumbbell or not TrainToolConfig or not TrainToolConfig.TRAIN_TOOLS then return end
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Currencies or not data.Currencies.Cash then return end
+    local cash = data.Currencies.Cash
+    local owned = data.OwnedTrainTools or {}
+    local equipped = data.EquippedTrainTool
+
+    local bestToBuy = nil
+    local maxGain = -1
+
+    for id, tool in pairs(TrainToolConfig.TRAIN_TOOLS) do
+        if not tool.isSpecial and tool.cost and tool.cost > 0 then
+            if not owned[id] and cash >= tool.cost then
+                local gain = tool.gainPerTrain or 0
+                if gain > maxGain then
+                    maxGain = gain
+                    bestToBuy = id
+                end
+            end
+        end
+    end
+
+    if bestToBuy then
+        pcall(function()
+            TrainingService.RF.BuyTrainTool:InvokeServer(bestToBuy)
+            task.wait(0.15)
+            TrainingService.RF.EquipTrainTool:InvokeServer(bestToBuy)
+        end)
+    else
+        local bestOwned = nil
+        local highestOwnedGain = -1
+        for id, tool in pairs(TrainToolConfig.TRAIN_TOOLS) do
+            if owned[id] then
+                local gain = tool.gainPerTrain or 0
+                if gain > highestOwnedGain then
+                    highestOwnedGain = gain
+                    bestOwned = id
+                end
+            end
+        end
+        if bestOwned and bestOwned ~= equipped then
+            pcall(function()
+                TrainingService.RF.EquipTrainTool:InvokeServer(bestOwned)
+            end)
+        end
+    end
+end
+
+-- 4. Staff / Pickaxe Auto Purchaser
+local function buyBestStaff()
+    if not State.AutoBuyStaff or not StaffConfig then return end
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Currencies or not data.Currencies.Cash then return end
+    local cash = data.Currencies.Cash
+    local owned = data.OwnedPickaxes or {}
+    local equipped = data.EquippedPickaxe
+
+    local bestToBuy = nil
+    local maxReach = -1
+
+    for id, staff in pairs(StaffConfig) do
+        if not staff.isSpecial and staff.cost and staff.cost > 0 then
+            if not owned[id] and cash >= staff.cost then
+                local reach = staff.reach or 0
+                if reach > maxReach then
+                    maxReach = reach
+                    bestToBuy = id
+                end
+            end
+        end
+    end
+
+    if bestToBuy then
+        pcall(function()
+            PickaxeService.RF.BuyPickaxe:InvokeServer(bestToBuy)
+            task.wait(0.15)
+            PickaxeService.RF.EquipPickaxe:InvokeServer(bestToBuy)
+        end)
+    else
+        local bestOwned = nil
+        local highestReach = -1
+        for id, staff in pairs(StaffConfig) do
+            if owned[id] then
+                local reach = staff.reach or 0
+                if reach > highestReach then
+                    highestReach = reach
+                    bestOwned = id
+                end
+            end
+        end
+        if bestOwned and bestOwned ~= equipped then
+            pcall(function()
+                PickaxeService.RF.EquipPickaxe:InvokeServer(bestOwned)
+            end)
+        end
+    end
+end
+
+-- 5. Upgrades & Rebirth
+local function handleUpgrades()
+    if not UpgradeConfig then return end
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Currencies or not data.Currencies.Cash then return end
+    local cash = data.Currencies.Cash
+    local upgs = data.Upgrades or {}
+
+    -- PlotUpgrade
+    if State.AutoUpgradePlot then
+        local currentLvl = upgs.PlotUpgrade or 0
+        local nextPrice = UpgradeConfig.GetPrice("PlotUpgrade", currentLvl + 1)
+        if nextPrice and cash >= nextPrice then
+            pcall(function()
+                UpgradesService.RF.Upgrade:InvokeServer("PlotUpgrade", 1)
+            end)
+            task.wait(0.15)
+        end
+    end
+
+    -- Carry
+    if State.AutoUpgradeCarry then
+        local currentLvl = upgs.Carry or 0
+        local nextPrice = UpgradeConfig.GetPrice("Carry", currentLvl + 1)
+        if nextPrice and cash >= nextPrice then
+            pcall(function()
+                UpgradesService.RF.Upgrade:InvokeServer("Carry", 1)
+            end)
+            task.wait(0.15)
+        end
+    end
+
+    -- Speed
+    if State.AutoUpgradeSpeed then
+        local currentLvl = upgs.MovementSpeed or 0
+        local maxBuy = UpgradeConfig.GetMaxBuyable("MovementSpeed", currentLvl, cash)
+        if maxBuy and maxBuy > 0 then
+            pcall(function()
+                UpgradesService.RF.Upgrade:InvokeServer("MovementSpeed", math.min(maxBuy, 10))
+            end)
+            task.wait(0.15)
+        end
+    end
+end
+
+local function handleRebirth()
+    if not State.AutoRebirth or not RebirthConfig or not RebirthConfig.REBIRTH then return end
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Currencies or not data.Currencies.Cash then return end
+    local curRebirth = data.Rebirth or 0
+    local cash = data.Currencies.Cash
+
+    if State.TargetRebirth ~= "Unlimited / Max" then
+        local targetNum = tonumber(State.TargetRebirth:match("%d+"))
+        if targetNum and curRebirth >= targetNum then
+            return
+        end
+    end
+
+    local nextTier = RebirthConfig.REBIRTH[curRebirth + 1]
+    if nextTier and nextTier.Cost and nextTier.Cost.Cash then
+        if cash >= nextTier.Cost.Cash then
+            pcall(function()
+                RebirthService.RF.Rebirth:InvokeServer()
+            end)
+        end
+    end
+end
+
+-- 6. Freebies & Rewards (Intelligent Precondition Validation & Cooldown Guards)
+local lastDailyCheck = 0
+local lastPlaytimeCheck = 0
+local lastGroupRewardTry = -300
+local passTiersTried = {}
+local questsTried = {}
+
+local function handleFreebies()
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data then return end
+
+    -- Offline cash: only collect if offline cash > 0
+    if State.AutoOfflineCash and (data.OfflineCash or 0) > 0 then
+        pcall(function() AnimalService.RF.CollectOfflineCash:InvokeServer() end)
+    end
+
+    -- Free shop
+    if State.AutoFreeShop and FreeShopConfig then
+        local lastClaim = data.LastFreeShopClaim or 0
+        local targetIndex = FreeShopConfig.CURRENT_CLAIM_INDEX or 1
+        if lastClaim < targetIndex then
+            pcall(function() FreeShopService.RF.Claim:InvokeServer() end)
+        end
+    end
+
+    -- Spin wheel: requires LuminousCoins >= 25
+    if State.AutoSpinWheel and data.Currencies and (data.Currencies.LuminousCoins or 0) >= 25 then
+        pcall(function() SpinWheelService.RF.SpinAll:InvokeServer() end)
+    end
+
+    -- Playtime gifts
+    if State.AutoPlaytimeGifts then
+        local now = os.clock()
+        if (now - lastPlaytimeCheck) >= 10 then
+            lastPlaytimeCheck = now
+            pcall(function()
+                if PlaytimeRewardController and PlaytimeRewardController.GetAvailableGiftsCount then
+                    if PlaytimeRewardController:GetAvailableGiftsCount() > 0 then
+                        local nextGift = PlaytimeRewardController:GetNextClaimableGift()
+                        if nextGift then
+                            PlaytimeRewardController:ClaimGift(nextGift)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    -- Daily rewards (24h cooldown, VIP only if owned)
+    if State.AutoDailyRewards then
+        local now = os.clock()
+        if (now - lastDailyCheck) >= 60 then
+            lastDailyCheck = now
+            local daily = data.DailyReward
+            if daily then
+                local canClaim = daily.LastClaimedDate == nil
+                    or (os.time() - daily.LastClaimedDate) >= 86400
+                if canClaim then
+                    pcall(function() DailyRewardService.RF.AttemptClaimFirst:InvokeServer() end)
+                    local week = ((tonumber(daily.Week) or 0) > 0 and DailyRewardConfig and DailyRewardConfig.REPEATING_WEEK)
+                        or (DailyRewardConfig and DailyRewardConfig.FIRST_WEEK)
+                    local nextDay = (tonumber(daily.LastClaimedDay) or 0) + 1
+                    if type(week) == "table" and week[nextDay] ~= nil then
+                        pcall(function() DailyRewardService.RF.ClaimReward:InvokeServer(nextDay) end)
+                    end
+                end
+            end
+            local hasVip = type(data.Gamepasses) == "table" and data.Gamepasses.VIP == true
+            if hasVip then
+                pcall(function() DailyRewardService.RF.ClaimVIPReward:InvokeServer() end)
+            end
+        end
+    end
+
+    -- Group reward (retry at most every 5 min — fails silently if not in the group)
+    if State.AutoGroupReward and not data.RedeemedGroupReward then
+        local now = os.clock()
+        if now - lastGroupRewardTry >= 300 then
+            lastGroupRewardTry = now
+            pcall(function() RewardService.RF.GroupReward:InvokeServer() end)
+        end
+    end
+
+    -- Season Pass Free Tier Auto-Claiming
+    if State.AutoSeasonPass and SeasonPassConfig and SeasonPassConfig.Level then
+        local sp = data.SeasonPass
+        if sp then
+            local exp = (data.Currencies and data.Currencies.PassExp) or 0
+            local curLvl = 0
+            for lvl, reqExp in ipairs(SeasonPassConfig.Level) do
+                if exp >= reqExp then curLvl = lvl end
+            end
+            local freeClaimed = sp.Free or {}
+            local now = os.clock()
+            for tier = 1, curLvl do
+                local triedAt = passTiersTried[tier] or -math.huge
+                if not (freeClaimed[tostring(tier)] or freeClaimed[tier]) and now - triedAt >= 120 then
+                    passTiersTried[tier] = now
+                    pcall(function()
+                        SeasonPassService.RF.ClaimPassReward:InvokeServer("Free", tier)
+                    end)
+                end
+            end
+        end
+    end
+
+    -- Quests Auto-Claiming (Daily, Hourly, SeasonPass)
+    if State.AutoQuests and data.Quests then
+        for qType, qList in pairs(data.Quests) do
+            if type(qList) == "table" then
+                local now = os.clock()
+                for _, q in pairs(qList) do
+                    if type(q) == "table" and q.id and q.isCompleted and not q.isClaimed then
+                        local qKey = tostring(qType) .. ":" .. tostring(q.id)
+                        if now - (questsTried[qKey] or -math.huge) >= 60 then
+                            questsTried[qKey] = now
+                            pcall(function()
+                                QuestService.RF.ClaimReward:InvokeServer(qType, q.id)
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Auto Potions (master toggle + multi-select: Train / Cash / Luck)
+    if State.AutoUsePotions and type(State.AutoPotions) == "table" and #State.AutoPotions > 0 and data.PotionInventory then
+        local active = data.ActivePotions or {}
+        for _, kind in ipairs(State.AutoPotions) do
+            if (data.PotionInventory[kind] or 0) > 0 and not active[kind] then
+                pcall(function()
+                    PotionService.RF.UsePotion:InvokeServer(kind)
+                end)
+            end
+        end
+    end
+end
+
+-- ── Auto promo-code engine ──────────────────────────────────────────────────────
+-- The game keeps its code list server-side, so we try every known code plus a
+-- predicted list built from the patterns this game uses (UPDATE#, like/visit
+-- milestones, event names). When the devs release a code matching a pattern,
+-- it redeems itself — no typing needed.
+local CODE_SEED = {
+    "RELEASE", "OPENSEA", "SEA", "ANIMALS", "TRAIN", "POWER", "LIKE", "DISCORD",
+    "WELCOME", "THANKYOU", "SORRY", "FREE", "FREECASH", "FREEPOTION", "LUCKY",
+    "BOOST", "X2", "EVENT", "BOSS", "DRAGON", "ZEUS", "DEVIL", "OCEAN", "SEAHUNT",
+    "HUNT", "EGGS", "EGG", "REBIRTH", "GROUP", "SECRET", "LEGENDARY", "FOLLOWERS",
+    "FANS", "MILLION", "SUMMER", "WINTER", "NEWYEAR",
+}
+local codeCandidates = nil
+local codeStatus = {}   -- code -> "done" | "fail"
+local codeFailAt = {}   -- code -> os.clock() of last failed attempt
+local codeScanAt = 0
+
+local function buildCodeCandidates()
+    if codeCandidates then return codeCandidates end
+    local list, seen = {}, {}
+    local function add(c)
+        if not seen[c] then seen[c] = true; list[#list + 1] = c end
+    end
+    for _, c in ipairs(CODE_SEED) do add(c) end
+    for i = 1, 30 do add("UPDATE" .. i) end
+    for _, m in ipairs({ "1K", "5K", "10K", "15K", "20K", "25K", "50K", "75K", "100K",
+        "150K", "200K", "250K", "300K", "400K", "500K", "750K", "1M" }) do
+        add(m); add(m .. "LIKES"); add(m .. "VISITS")
+    end
+    codeCandidates = list
+    return list
+end
+
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        if State.AutoRedeemCodes and (os.clock() - codeScanAt) >= 30 then
+            codeScanAt = os.clock()
+            pcall(function()
+                local data = nil
+                pcall(function() data = ReplicaController:GetPlayerData() end)
+                local redeemed = {}
+                if type(data) == "table" and type(data.RedeemedCodes) == "table" then
+                    for k, v in pairs(data.RedeemedCodes) do
+                        if type(k) == "string" then redeemed[k] = true end
+                        if type(v) == "string" then redeemed[v] = true end
+                    end
+                end
+                for _, c in ipairs(buildCodeCandidates()) do
+                    if not State.AutoRedeemCodes then break end
+                    local st = codeStatus[c]
+                    local eligible = st == nil
+                        or (st == "fail" and (os.clock() - (codeFailAt[c] or 0)) >= 600)
+                    if eligible and not redeemed[c] then
+                        local ok, res = pcall(function()
+                            return CodesService.RF.RedeemCode:InvokeServer(c)
+                        end)
+                        if ok and res == true then
+                            codeStatus[c] = "done"
+                            Notify({
+                                Title = "New Code Redeemed",
+                                Content = "Auto-redeemed code: " .. c,
+                                Duration = 5
+                            })
+                        else
+                            codeStatus[c] = "fail"
+                            codeFailAt[c] = os.clock()
+                        end
+                        task.wait(0.4)
+                    end
+                end
+            end)
+        end
+        task.wait(5)
+    end
+end)
+
+-- 7. Power Training Loop
+local function updateHUDPower(powerVal)
+    pcall(function()
+        local speedLabel = LP.PlayerGui:FindFirstChild("HUD")
+            and LP.PlayerGui.HUD:FindFirstChild("LeftContainer")
+            and LP.PlayerGui.HUD.LeftContainer:FindFirstChild("Currency")
+            and LP.PlayerGui.HUD.LeftContainer.Currency:FindFirstChild("Speed")
+            and LP.PlayerGui.HUD.LeftContainer.Currency.Speed:FindFirstChild("Speed")
+            and LP.PlayerGui.HUD.LeftContainer.Currency.Speed.Speed:FindFirstChild("SpeedLabel")
+        if speedLabel then
+            local formatted = AbbreviationUtils and AbbreviationUtils:AbbreviateNumber(powerVal, 1) or formatNum(powerVal)
+            speedLabel.Text = formatted
+            local inner = speedLabel:FindFirstChild("Speed")
+            if inner then inner.Text = formatted end
+        end
+    end)
+end
+
+local function stopTraining()
+    pcall(function()
+        if TrainingService and TrainingService.RF and TrainingService.RF.StopTraining then
+            TrainingService.RF.StopTraining:InvokeServer()
+        end
+    end)
+    pcall(function()
+        if TrainingController and TrainingController.StopTraining then
+            TrainingController:StopTraining(true)
+        end
+    end)
+    pcall(function()
+        local char = LP.Character
+        if char then
+            char:SetAttribute("IsTrainingLocal", nil)
+            char:SetAttribute("DumbbellModel", nil)
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                    local tName = track.Name:lower()
+                    local aId = (track.Animation and track.Animation.AnimationId or ""):lower()
+                    if tName:find("train") or tName:find("dumb") or aId:find("train") or aId:find("dumb") then
+                        track:Stop()
+                    end
+                end
+                if hum.WalkSpeed == 0 then
+                    hum.WalkSpeed = 16
+                end
+            end
+        end
+        LP:SetAttribute("IsTrainingLocal", nil)
+    end)
+end
+
+local function ensureTraining()
+    if not State.AutoTrain then return end
+    if LP:GetAttribute("IsWaveActive") then return end
+
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    local equippedTool = data and data.EquippedTrainTool or "anvildumbbell"
+    local char = LP.Character
+
+    if char then
+        if char:GetAttribute("DumbbellModel") ~= equippedTool then
+            char:SetAttribute("DumbbellModel", equippedTool)
+        end
+        char:SetAttribute("IsTrainingLocal", true)
+    end
+    LP:SetAttribute("IsTrainingLocal", true)
+
+    pcall(function()
+        TrainingService.RF.StartTraining:InvokeServer()
+    end)
+
+    local curPower = LP.leaderstats and LP.leaderstats:FindFirstChild("Power") and LP.leaderstats.Power.Value or 0
+    local toolConf = TrainToolConfig and TrainToolConfig.TRAIN_TOOLS and TrainToolConfig.TRAIN_TOOLS[equippedTool]
+    local gain = toolConf and toolConf.gainPerTrain or 7500000
+
+    local TrainGain = RS:FindFirstChild("TrainGain")
+    if TrainGain then
+        pcall(function()
+            TrainGain:Fire(gain, curPower)
+        end)
+    end
+    updateHUDPower(curPower)
+
+    -- Auto-claim bonus x2 button when spawned or visible
+    if State.AutoClaimBonus then
+        pcall(function()
+            local x2Speed = LP.PlayerGui:FindFirstChild("SpeedEffect")
+                and LP.PlayerGui.SpeedEffect:FindFirstChild("LeftContainer")
+                and LP.PlayerGui.SpeedEffect.LeftContainer:FindFirstChild("Currency")
+                and LP.PlayerGui.SpeedEffect.LeftContainer.Currency:FindFirstChild("Speed")
+                and LP.PlayerGui.SpeedEffect.LeftContainer.Currency.Speed:FindFirstChild("x2Speed")
+            if x2Speed and x2Speed.Visible then
+                local Button = require(Knit.UIComponents.Button)
+                local btnObj = Button:FromInstance(x2Speed)
+                if btnObj and btnObj.Callbacks then
+                    for _, cb in ipairs(btnObj.Callbacks) do
+                        pcall(cb)
+                    end
+                end
+                x2Speed.Visible = false
+            end
+        end)
+    end
+end
+
+-- Hook SpawnBonus Remote & GUI for Instant Zero-Latency X2 Claiming
+local lastClaimedBonusId = ""
+pcall(function()
+    local knitTraining = nil
+    pcall(function() knitTraining = Knit.GetService("TrainingService") end)
+    if knitTraining and knitTraining.SpawnBonus then
+        local bonusConn = knitTraining.SpawnBonus:Connect(function(bonusId)
+            if State.AutoClaimBonus and bonusId and bonusId ~= lastClaimedBonusId then
+                lastClaimedBonusId = bonusId
+                task.wait(0.05)
+                pcall(function() knitTraining:ClaimBonus(bonusId) end)
+                pcall(function() TrainingService.RF.ClaimBonus:InvokeServer(bonusId) end)
+                pcall(function()
+                    local x2Speed = LP.PlayerGui:FindFirstChild("SpeedEffect")
+                        and LP.PlayerGui.SpeedEffect:FindFirstChild("LeftContainer")
+                        and LP.PlayerGui.SpeedEffect.LeftContainer:FindFirstChild("Currency")
+                        and LP.PlayerGui.SpeedEffect.LeftContainer.Currency:FindFirstChild("Speed")
+                        and LP.PlayerGui.SpeedEffect.LeftContainer.Currency.Speed:FindFirstChild("x2Speed")
+                    if x2Speed then x2Speed.Visible = false end
+                end)
+            end
+        end)
+        table.insert(_conns, bonusConn)
+    end
+end)
+
+pcall(function()
+    local x2Speed = LP.PlayerGui:FindFirstChild("SpeedEffect")
+        and LP.PlayerGui.SpeedEffect:FindFirstChild("LeftContainer")
+        and LP.PlayerGui.SpeedEffect.LeftContainer:FindFirstChild("Currency")
+        and LP.PlayerGui.SpeedEffect.LeftContainer.Currency:FindFirstChild("Speed")
+        and LP.PlayerGui.SpeedEffect.LeftContainer.Currency.Speed:FindFirstChild("x2Speed")
+    if x2Speed then
+        local visConn = x2Speed:GetPropertyChangedSignal("Visible"):Connect(function()
+            if State.AutoClaimBonus and x2Speed.Visible then
+                task.wait(0.03)
+                pcall(function()
+                    local Button = require(Knit.UIComponents.Button)
+                    local btnObj = Button:FromInstance(x2Speed)
+                    if btnObj and btnObj.Callbacks then
+                        for _, cb in ipairs(btnObj.Callbacks) do
+                            pcall(cb)
+                        end
+                    end
+                end)
+                x2Speed.Visible = false
+            end
+        end)
+        table.insert(_conns, visConn)
+    end
+end)
+
+-- ── 7. BACKGROUND THREADS ────────────────────────────────────────────────────────
+
+-- ── 7.5 DISCORD WEBHOOK ALERTS, FPS BOOST & SERVER HOP ────────────────────────
+local RARITY_COLORS = {
+    Legendary = 0xFFC83C, Mythic = 0xFF8228, Divine = 0xFF3C3C,
+    Secret = 0xBE50FF, Cosmic = 0x825AFF, Eternal = 0x50C8FF,
+    SPECIAL = 0xFF50A0, CYBER = 0x00FFC8, LAW = 0xFFFFFF,
+    Titanium = 0xA0C8FF, Magical = 0xC878FF, Nightfall = 0x6464C8,
+    Frosty = 0xA0E6FF, Lightning = 0xFFFF78,
+}
+
+local alertedEntities = {}
+local alertedCount = 0
+
+local function sendWebhookAlert(titleText, descText, colorInt)
+    if not State.WebhookAlerts then return end
+    local url = State.WebhookURL
+    if type(url) ~= "string" or not url:match("^https://discord") then return end
+    if not httpRequest then return end
+    task.spawn(function()
+        pcall(function()
+            httpRequest({
+                Url = url,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode({
+                    username = "SKT Hub",
+                    embeds = {{
+                        title = titleText,
+                        description = descText,
+                        color = colorInt or 4359924,
+                        footer = { text = "Open Sea For Animals" },
+                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                    }},
+                }),
+            })
+        end)
+    end)
+end
+
+local function describeSpawnedItem(m, eggType, bossId)
+    local pretty = tostring(eggType or bossId):gsub("_", " ")
+    local mut = m:GetAttribute("Mutation")
+    local size = m:GetAttribute("Size")
+    local extras = ""
+    if mut and mut ~= "NORMAL" then extras = extras .. " [" .. tostring(mut) .. "]" end
+    if size and size ~= "baby" then extras = extras .. " (" .. tostring(size) .. ")" end
+    return pretty .. extras
+end
+
+local function scanRareSpawns()
+    if not State.WebhookAlerts or not State.WebhookRareEggs then return end
+    local folder = workspace:FindFirstChild("SpawnedItems")
+    if not folder then return end
+    local minRank = MinRarityThresholds[State.WebhookMinRarity] or 8
+    for _, m in ipairs(folder:GetChildren()) do
+        if m:IsA("Model") then
+            local eggType = m:GetAttribute("EggType")
+            local bossId = m:GetAttribute("BossId")
+            if eggType or bossId then
+                local rarity = bossId and "SPECIAL" or (EggToRarity[eggType] or "Common")
+                local rank = bossId and 11 or (EggRarityRanks[rarity] or 1)
+                if rank >= minRank then
+                    local eid = m:GetAttribute("EntityId") or m:GetDebugId()
+                    if not alertedEntities[eid] then
+                        alertedEntities[eid] = true
+                        alertedCount = alertedCount + 1
+                        if alertedCount > 400 then
+                            table.clear(alertedEntities)
+                            alertedCount = 0
+                        end
+                        local label = rarity .. " • " .. describeSpawnedItem(m, eggType, bossId)
+                        sendWebhookAlert(
+                            bossId and "Boss Item Detected" or "Rare Egg Detected",
+                            "**" .. label .. "** spawned in the sea\nPlayer: " .. tostring(LP.DisplayName),
+                            RARITY_COLORS[rarity] or 10181046
+                        )
+                    end
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(0.75)
+        pcall(scanRareSpawns)
+    end
+end)
+
+-- FPS Boost Mode (disable shadows, post FX, particles, terrain water)
+local fpsBoostBackup = { shadows = nil, terrain = nil, quality = nil }
+local fpsBoostEffects = {}
+local fpsBoostConn = nil
+
+local function isVisualEffect(d)
+    return d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+        or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles")
+end
+
+local function disableWorkspaceEffects()
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if isVisualEffect(d) and d.Enabled then
+            fpsBoostEffects[d] = true
+            pcall(function() d.Enabled = false end)
+        end
+    end
+end
+
+local function setFpsBoost(on)
+    if on then
+        pcall(function()
+            fpsBoostBackup.shadows = Lighting.GlobalShadows
+            Lighting.GlobalShadows = false
+        end)
+        for _, e in ipairs(Lighting:GetChildren()) do
+            if e:IsA("PostEffect") then
+                fpsBoostEffects[e] = e.Enabled
+                pcall(function() e.Enabled = false end)
+            elseif e:IsA("Atmosphere") then
+                fpsBoostEffects[e] = e.Parent
+                pcall(function() e.Parent = nil end)
+            end
+        end
+        pcall(function()
+            local t = workspace.Terrain
+            fpsBoostBackup.terrain = { t.WaterWaveSize, t.WaterWaveSpeed, t.WaterReflectance }
+            t.WaterWaveSize = 0
+            t.WaterWaveSpeed = 0
+            t.WaterReflectance = 0
+        end)
+        pcall(function()
+            local gs = UserSettings():GetService("UserGameSettings")
+            fpsBoostBackup.quality = gs.SavedQualityLevel
+            gs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+        end)
+        disableWorkspaceEffects()
+        if fpsBoostConn then fpsBoostConn:Disconnect() end
+        fpsBoostConn = workspace.DescendantAdded:Connect(function(d)
+            if State.FPSBoost and isVisualEffect(d) then
+                fpsBoostEffects[d] = true
+                pcall(function() d.Enabled = false end)
+            end
+        end)
+        table.insert(_conns, fpsBoostConn)
+    else
+        if fpsBoostConn then fpsBoostConn:Disconnect() fpsBoostConn = nil end
+        for d, orig in pairs(fpsBoostEffects) do
+            pcall(function()
+                if d:IsA("Atmosphere") then
+                    if not d.Parent then d.Parent = orig end
+                else
+                    d.Enabled = (orig ~= false)
+                end
+            end)
+        end
+        table.clear(fpsBoostEffects)
+        if fpsBoostBackup.shadows ~= nil then
+            pcall(function() Lighting.GlobalShadows = fpsBoostBackup.shadows end)
+            fpsBoostBackup.shadows = nil
+        end
+        if fpsBoostBackup.terrain then
+            pcall(function()
+                local t = workspace.Terrain
+                t.WaterWaveSize, t.WaterWaveSpeed, t.WaterReflectance =
+                    fpsBoostBackup.terrain[1], fpsBoostBackup.terrain[2], fpsBoostBackup.terrain[3]
+            end)
+            fpsBoostBackup.terrain = nil
+        end
+        if fpsBoostBackup.quality then
+            pcall(function()
+                UserSettings():GetService("UserGameSettings").SavedQualityLevel = fpsBoostBackup.quality
+            end)
+            fpsBoostBackup.quality = nil
+        end
+    end
+end
+_G.SKTFpsRestore = function() pcall(function() setFpsBoost(false) end) end
+
+-- Server Hop Helper (rejoin / random / smallest via Roblox public API)
+local function serverHop(mode)
+    if mode == "rejoin" then
+        Notify({ Title = "Rejoining", Content = "Rejoining the same server...", Duration = 3 })
+        pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+        return
+    end
+    Notify({ Title = "Server Hop", Content = "Searching for a new server...", Duration = 3 })
+    task.spawn(function()
+        local servers = nil
+        if httpRequest then
+            local ok, res = pcall(function()
+                return httpRequest({
+                    Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100",
+                    Method = "GET",
+                })
+            end)
+            if ok and res and res.Body then
+                local ok2, decoded = pcall(function() return HttpService:JSONDecode(res.Body) end)
+                if ok2 and decoded and decoded.data then servers = decoded.data end
+            end
+        end
+        if servers and #servers > 0 then
+            local candidates = {}
+            for _, s in ipairs(servers) do
+                if s.id ~= game.JobId and (s.playing or 0) < (s.maxPlayers or 1) then
+                    table.insert(candidates, s)
+                end
+            end
+            local pick = nil
+            if mode == "smallest" then
+                for _, s in ipairs(candidates) do
+                    if not pick or (s.playing or 0) < (pick.playing or 0) then pick = s end
+                end
+            elseif #candidates > 0 then
+                pick = candidates[math.random(1, #candidates)]
+            end
+            if pick then
+                pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, pick.id, LP) end)
+                return
+            end
+        end
+        pcall(function() TeleportService:Teleport(game.PlaceId, LP) end)
+    end)
+end
+
+-- Thread 1: Wave Sniping
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(0.3)
+        if State.AutoWave then
+            pcall(runWaveSniping)
+        end
+    end
+end)
+
+-- Thread 2: Eggs & Animals Plot Automation
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(2)
+        pcall(handleEggsAndAnimals)
+        pcall(clearNotificationSpam)
+    end
+end)
+
+-- Thread 3: Power Training & Gear
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(2)
+        pcall(ensureTraining)
+        pcall(buyBestDumbbell)
+        pcall(buyBestStaff)
+    end
+end)
+
+-- Thread 4: Upgrades, Rebirth & Freebies
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(2)
+        pcall(handleUpgrades)
+        pcall(handleRebirth)
+        pcall(handleFreebies)
+    end
+end)
+
+-- Thread 5: Anti-AFK & Hardware Heartbeat
+task.spawn(function()
+    local ps = LP:FindFirstChild("PlayerScripts")
+    if ps then
+        for _, desc in ipairs(ps:GetDescendants()) do
+            if desc:IsA("LocalScript") and desc.Name:lower():find("afk") then
+                pcall(function()
+                    desc.Disabled = true
+                    desc:Destroy()
+                end)
+            end
+        end
+        local c = ps.DescendantAdded:Connect(function(desc)
+            if desc:IsA("LocalScript") and desc.Name:lower():find("afk") then
+                pcall(function()
+                    desc.Disabled = true
+                    desc:Destroy()
+                end)
+            end
+        end)
+        table.insert(_conns, c)
+    end
+
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(35)
+        if State.AntiAFK then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
+                VirtualUser:CaptureController()
+            end)
+        end
+    end
+end)
+
+-- Thread 6: Custom Speed Enforcer
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(0.5)
+        if State.CustomSpeedEnabled then
+            pcall(function()
+                local char = LP.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.WalkSpeed ~= State.CustomSpeedValue then
+                    hum.WalkSpeed = State.CustomSpeedValue
+                end
+            end)
+        end
+    end
+end)
+
+-- Thread 7: Event Boss Watcher (Devil / Zeus / Dragon Egg Auto-Sniper)
+task.spawn(function()
+    local ae = RS:FindFirstChild("ActiveEvents")
+    if ae then
+        local evConn = ae.ChildAdded:Connect(function(child)
+            if child.Name == "DEVIL" or child.Name == "ZEUS" then
+                pcall(function()
+                    Notify({
+                        Title = "Event Boss Spawned!",
+                        Content = string.format("Boss %s detected! Dragon Egg hunt mode engaged.", child.Name),
+                        Duration = 6
+                    })
+                end)
+                if State.WebhookBossAlerts then
+                    sendWebhookAlert(
+                        "Event Boss Spawned",
+                        "Boss **" .. tostring(child.Name) .. "** is active\nPlayer: " .. tostring(LP.DisplayName),
+                        15158332
+                    )
+                end
+                if State.AutoHuntEventBoss then
+                    task.wait(0.5)
+                    pcall(runWaveSniping)
+                end
+            end
+        end)
+        table.insert(_conns, evConn)
+    end
+
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(3)
+        if State.AutoHuntEventBoss then
+            local activeEvents = RS:FindFirstChild("ActiveEvents")
+            local isBossActive = false
+            if activeEvents then
+                for _, ev in ipairs(activeEvents:GetChildren()) do
+                    local evNameUpper = string.upper(ev.Name)
+                    if string.find(evNameUpper, "DEVIL") or string.find(evNameUpper, "ZEUS") then
+                        isBossActive = true
+                        break
+                    end
+                end
+            end
+            if isBossActive then
+                if not isSnipingWave and not LP:GetAttribute("IsWaveActive") then
+                    pcall(runWaveSniping)
+                end
+            end
+        end
+    end
+end)
+
+-- ── 8. BULK TRADING & GIFTING SYSTEM ─────────────────────────────────────────────
+local isBulkTrading = false
+
+local function getOnlinePlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            table.insert(names, p.Name)
+        end
+    end
+    if #names == 0 then
+        table.insert(names, "No Other Players")
+    end
+    table.sort(names)
+    return names
+end
+
+local function getAnimalFilterList()
+    local list = { "All Animals" }
+    local seen = {}
+
+    pcall(function()
+        local data = ReplicaController:GetPlayerData()
+        if data and data.Inventory then
+            for _, item in pairs(data.Inventory) do
+                if item.itemType == "Brainrot" and item.innerEntity and item.innerEntity.brainrotType then
+                    local rawName = item.innerEntity.brainrotType
+                    local formatted = rawName:gsub("_", " ")
+                    formatted = formatted:gsub("(%a)([%w_']*)", function(first, rest)
+                        return first:upper() .. rest:lower()
+                    end)
+                    if not seen[formatted:lower()] then
+                        seen[formatted:lower()] = true
+                        table.insert(list, formatted)
+                    end
+                end
+            end
+        end
+    end)
+
+    pcall(function()
+        local cfg = require(RS.Configs.BrainrotsConfig)
+        local allGame = {}
+        if cfg and cfg.CONFIG then
+            for k, _ in pairs(cfg.CONFIG) do
+                local rawName = tostring(k)
+                local formatted = rawName:gsub("_", " ")
+                formatted = formatted:gsub("(%a)([%w_']*)", function(first, rest)
+                    return first:upper() .. rest:lower()
+                end)
+                if not seen[formatted:lower()] then
+                    seen[formatted:lower()] = true
+                    table.insert(allGame, formatted)
+                end
+            end
+        end
+        table.sort(allGame)
+        for _, name in ipairs(allGame) do
+            table.insert(list, name)
+        end
+    end)
+
+    return list
+end
+
+-- Double-layer Auto-Accept Receiver Engine
+pcall(function()
+    local knitGifting = nil
+    pcall(function() knitGifting = Knit.GetService("GiftingService") end)
+    if knitGifting and knitGifting.GiftReceived then
+        local giftConn = knitGifting.GiftReceived:Connect(function(sender, itemInfo)
+            if State.AutoAcceptGifts and itemInfo and itemInfo.id then
+                pcall(function()
+                    GiftingService.RF.ClaimGift:InvokeServer(itemInfo.id)
+                end)
+                pcall(function()
+                    local wc = Knit.GetController("WindowController")
+                    if wc and wc.currentWindow == "GiftReceivePopup" then
+                        wc:CloseCurrentWindow()
+                    end
+                end)
+                Notify({
+                    Title = "Gift Received",
+                    Content = "Accepted gift from @" .. tostring(sender and sender.DisplayName or "unknown player"),
+                    Duration = 2.5
+                })
+            end
+        end)
+        table.insert(_conns, giftConn)
+    end
+end)
+
+pcall(function()
+    local popup = LP:WaitForChild("PlayerGui", 5)
+        and LP.PlayerGui:WaitForChild("Windows", 5)
+        and LP.PlayerGui.Windows:WaitForChild("GiftReceivePopup", 5)
+    if popup then
+        local popupConn = popup:GetPropertyChangedSignal("Visible"):Connect(function()
+            if popup.Visible and State.AutoAcceptGifts then
+                local acceptBtn = popup:FindFirstChild("Accept")
+                if acceptBtn then
+                    local Button = require(Knit.UIComponents.Button)
+                    local btnObj = Button:FromInstance(acceptBtn)
+                    if btnObj and btnObj.Callbacks then
+                        for _, cb in ipairs(btnObj.Callbacks) do
+                            pcall(cb)
+                        end
+                    end
+                end
+            end
+        end)
+        table.insert(_conns, popupConn)
+    end
+end)
+
+local function startBulkTrade()
+    if isBulkTrading then
+        Notify({ Title = "System Busy", Content = "A previous bulk send is still running — press Stop first.", Duration = 3 })
+        return
+    end
+
+    local targetName = State.TradeTargetPlayer
+    if (not targetName or targetName == "" or targetName:find("No Other Players")) and UIControls.TradeTargetPlayer then
+        local uiVal = UIControls.TradeTargetPlayer.Value
+        if type(uiVal) == "string" and uiVal ~= "" and not uiVal:find("No Other Players") then
+            targetName = uiVal
+            State.TradeTargetPlayer = uiVal
+        elseif type(uiVal) == "table" and uiVal[1] and not tostring(uiVal[1]):find("No Other Players") then
+            targetName = tostring(uiVal[1])
+            State.TradeTargetPlayer = targetName
+        end
+    end
+
+    local targetPlayer = nil
+    if targetName and targetName ~= "" and not targetName:find("No Other Players") then
+        targetPlayer = Players:FindFirstChild(targetName)
+        if not targetPlayer then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LP and (p.Name == targetName or p.DisplayName == targetName or targetName:find(p.Name, 1, true)) then
+                    targetPlayer = p
+                    break
+                end
+            end
+        end
+    end
+
+    if not targetPlayer then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LP then
+                targetPlayer = p
+                targetName = p.Name
+                State.TradeTargetPlayer = p.Name
+                if UIControls.TradeTargetPlayer then
+                    pcall(function() UIControls.TradeTargetPlayer:SetValue(p.Name) end)
+                end
+                break
+            end
+        end
+    end
+
+    if not targetPlayer then
+        Notify({ Title = "No Players", Content = "No other players in this server. Wait for someone to join.", Duration = 3.5 })
+        return
+    end
+
+    local data = nil
+    pcall(function() data = ReplicaController:GetPlayerData() end)
+    if not data or not data.Inventory then
+        Notify({ Title = "Error", Content = "Could not read inventory data.", Duration = 3 })
+        return
+    end
+
+    local placedLookup = {}
+    if data.PlacedAnimals then
+        for _, info in pairs(data.PlacedAnimals) do
+            if info and info.id then
+                placedLookup[info.id] = true
+            end
+        end
+    end
+
+    local candidates = {}
+    local filter = State.TradeFilterAnimal or "All Animals"
+    if (not filter or filter == "" or filter == "All Animals") and UIControls.TradeFilterAnimal then
+        local uiF = UIControls.TradeFilterAnimal.Value
+        if type(uiF) == "string" and uiF ~= "" then
+            filter = uiF
+        end
+    end
+    local isAll = (filter == "All Animals" or filter == "All Available")
+    local targetClean = filter:lower():gsub("[%s_%-]", "")
+
+    for id, item in pairs(data.Inventory) do
+        if item.itemType == "Brainrot" and item.innerEntity and not placedLookup[id] then
+            local bType = (item.innerEntity.brainrotType or ""):lower()
+            local bClean = bType:gsub("[%s_%-]", "")
+            local mutation = item.innerEntity.mutation or "NORMAL"
+            local match = false
+
+            if isAll then
+                match = true
+            elseif targetClean == bClean or bClean:find(targetClean, 1, true) or targetClean:find(bClean, 1, true) then
+                match = true
+            end
+
+            if match then
+                table.insert(candidates, {
+                    id = id,
+                    name = item.innerEntity.brainrotType or "Animal",
+                    mutation = mutation,
+                    level = item.innerEntity.level or 1
+                })
+            end
+        end
+    end
+
+    if #candidates == 0 then
+        Notify({ Title = "No Matching Animals", Content = "No animals in inventory matching filter '" .. tostring(filter) .. "'", Duration = 3.5 })
+        return
+    end
+
+    local quantity = tonumber(State.TradeQuantity)
+    if not quantity and UIControls.TradeQuantity then
+        quantity = tonumber(UIControls.TradeQuantity.Value)
+    end
+    local maxToSend = math.min(#candidates, quantity or 10)
+    isBulkTrading = true
+
+    task.spawn(function()
+        local isBurst = State.TradeInstantBurst
+        if UIControls.TradeInstantBurst then
+            isBurst = UIControls.TradeInstantBurst.Value
+        end
+
+        Notify({
+            Title = "Bulk Send Started",
+            Content = string.format("Sending %d animal(s) to @%s (%s)...", maxToSend, targetPlayer.DisplayName, isBurst and "Burst mode" or "Queued mode"),
+            Duration = 3
+        })
+
+        local sentCount = 0
+
+        if isBurst then
+            for i = 1, maxToSend do
+                if not isBulkTrading or not _G.OpenSeaRunning then break end
+                if not targetPlayer or not targetPlayer.Parent then break end
+
+                local c = candidates[i]
+                task.spawn(function()
+                    pcall(function()
+                        local knitGifting = nil
+                        pcall(function() knitGifting = Knit.GetService("GiftingService") end)
+                        if knitGifting and knitGifting.GiftBrainrot then
+                            knitGifting:GiftBrainrot(c.id, targetPlayer)
+                        else
+                            local rf = RS:FindFirstChild("Packages")
+                                and RS.Packages._Index:FindFirstChild("sleitnick_knit@1.7.0")
+                                and RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services:FindFirstChild("GiftingService")
+                                and RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.GiftingService.RF:FindFirstChild("GiftBrainrot")
+                            if rf then
+                                rf:InvokeServer(c.id, targetPlayer)
+                            end
+                        end
+                    end)
+                    pcall(function()
+                        local wc = Knit.GetController("WindowController")
+                        if wc and (wc.currentWindow == "GiftSendPopup" or wc.currentWindow == "GiftReceivePopup") then
+                            wc:CloseCurrentWindow()
+                        end
+                    end)
+                end)
+                sentCount = sentCount + 1
+                task.wait(0.015)
+            end
+        else
+            local speed = tonumber(State.TradeSpeedDelay)
+            if not speed and UIControls.TradeSpeedDelay then
+                speed = tonumber(UIControls.TradeSpeedDelay.Value)
+            end
+            local delayTime = math.max(0.01, speed or 0.05)
+
+            for i = 1, maxToSend do
+                if not isBulkTrading or not _G.OpenSeaRunning then break end
+
+                if not targetPlayer or not targetPlayer.Parent then
+                    Notify({ Title = "Player Left", Content = "The target player left the server — sending stopped.", Duration = 4 })
+                    break
+                end
+
+                local c = candidates[i]
+                local ok = false
+
+                pcall(function()
+                    local knitGifting = nil
+                    pcall(function() knitGifting = Knit.GetService("GiftingService") end)
+                    if knitGifting and knitGifting.GiftBrainrot then
+                        local s = pcall(function()
+                            knitGifting:GiftBrainrot(c.id, targetPlayer)
+                        end)
+                        ok = s
+                    end
+                    if not ok then
+                        local rf = RS:FindFirstChild("Packages")
+                            and RS.Packages._Index:FindFirstChild("sleitnick_knit@1.7.0")
+                            and RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services:FindFirstChild("GiftingService")
+                            and RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.GiftingService.RF:FindFirstChild("GiftBrainrot")
+                        if rf then
+                            local s = pcall(function()
+                                rf:InvokeServer(c.id, targetPlayer)
+                            end)
+                            ok = s
+                        end
+                    end
+                end)
+
+                if ok then
+                    sentCount = sentCount + 1
+                end
+
+                pcall(function()
+                    local wc = Knit.GetController("WindowController")
+                    if wc and (wc.currentWindow == "GiftSendPopup" or wc.currentWindow == "GiftReceivePopup") then
+                        wc:CloseCurrentWindow()
+                    end
+                end)
+
+                task.wait(delayTime)
+            end
+        end
+
+        isBulkTrading = false
+        Notify({
+            Title = "Bulk Send Complete",
+            Content = string.format("Sent %d/%d animal(s) to @%s", sentCount, maxToSend, targetPlayer.DisplayName),
+            Duration = 5
+        })
+    end)
+end
+
+local function stopBulkTrade()
+    if isBulkTrading then
+        isBulkTrading = false
+        Notify({ Title = "Bulk Send Stopped", Content = "Bulk sending has been cancelled.", Duration = 3 })
+    end
+end
+
+-- ── 9. SKT HUB UI — WINDOW & TABS ────────────────────────────────────────────────
+local Window = Library:CreateWindow({ Title = "SKT Hub", GameBadge = "Open Sea For Animals" })
+_G.OpenSeaWindow = Window
+
+-- failsafe: never leave the startup intro stuck if anything below errors
+task.delay(10, function()
+    pcall(function() Library.Window:CompleteIntro() end)
+    task.delay(1.5, function()
+        pcall(function()
+            local w = Library and Library.Window
+            if not w then return end
+            local overlay = w.IntroOverlay
+            if not overlay and w.Root then
+                overlay = w.Root:FindFirstChild("StartupOverlay")
+            end
+            if overlay and overlay.Parent then overlay:Destroy() end
+            w.IntroOverlay = nil
+        end)
+    end)
+end)
+
+pcall(function() Library:SetTheme("Cyber") end)
+
+local Tabs = {
+    Main     = Window:AddTab("Home", "Dashboard & live status"),
+    Sea      = Window:AddTab("Auto Farm", "Wave hunting, training & eggs"),
+    Farm     = Window:AddTab("Upgrade", "Upgrades, hatchery & rebirth"),
+    Shop     = Window:AddTab("Shop", "Gear shop & egg selling"),
+    Trade    = Window:AddTab("Trading", "Bulk gifting & auto accept"),
+    Rewards  = Window:AddTab("Rewards", "Freebies, potions & promo codes"),
+    Teleport = Window:AddTab("Teleport", "Locations & movement"),
+    Webhook  = Window:AddTab("Webhook", "Discord alerts & notifications"),
+    Settings = Window:AddTab("Settings", "Config & interface"),
+}
+_G.OpenSeaTabs = Tabs
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: MAIN (dashboard & live status)
+-- ─────────────────────────────────────────────────────────────────────────────────
+pcall(function() Library:BuildDashboard(Tabs.Main) end)
+
+local gStatus = Tabs.Main:AddLeftGroupbox("Live Status")
+local statusLabel = gStatus:AddParagraph("Connecting and loading player data...")
+
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        pcall(function()
+            local cash = LP:FindFirstChild("leaderstats") and LP.leaderstats:FindFirstChild("Cash") and LP.leaderstats.Cash.Value or 0
+            local power = LP:FindFirstChild("leaderstats") and LP.leaderstats:FindFirstChild("Power") and LP.leaderstats.Power.Value or 0
+            local speed = LP:FindFirstChild("leaderstats") and LP.leaderstats:FindFirstChild("Speed") and LP.leaderstats.Speed.Value or 16
+
+            local farmText = State.AutoWave and "ONLINE (ACTIVE)" or "STANDBY (IDLE)"
+            local targetEgg = "All"
+            if type(State.SpecificEggs) == "table" and #State.SpecificEggs > 0 then
+                targetEgg = #State.SpecificEggs == 1 and State.SpecificEggs[1] or (#State.SpecificEggs .. " types")
+            end
+            local minRarity = "All"
+            if type(State.MinEggRarity) == "table" and #State.MinEggRarity > 0 then
+                minRarity = #State.MinEggRarity == 1 and State.MinEggRarity[1] or (#State.MinEggRarity .. " rarities")
+            elseif type(State.MinEggRarity) == "string" then
+                minRarity = State.MinEggRarity
+            end
+
+            local activeEvents = RS:FindFirstChild("ActiveEvents")
+            local activeEvText = "None (Normal)"
+            if activeEvents and #activeEvents:GetChildren() > 0 then
+                local evNames = {}
+                for _, ev in ipairs(activeEvents:GetChildren()) do
+                    table.insert(evNames, ev.Name)
+                end
+                activeEvText = table.concat(evNames, ", ") .. " (ACTIVE!)"
+            end
+
+            local nwt = RS:FindFirstChild("NextWeatherTime")
+            local nextEvTimer = (nwt and nwt.Value and nwt.Value > 0) and formatSeconds(nwt.Value) or "N/A"
+
+            local descText = string.format(
+                "[Player] %s  |  [Bot Status] %s\n" ..
+                "[Cash] $%s  |  [Power] %s  |  [Speed] %s\n" ..
+                "[Sea Hunting] %s  |  [Mode] Packet Sniping\n" ..
+                "[Target Eggs] %s  |  [Min Rarity] %s\n" ..
+                "[Event Boss] %s  |  [Next Event] in %s\n" ..
+                "[Mutations] %s  |  [Anti-AFK 24h] Running",
+                LP.DisplayName or LP.Name, farmText,
+                formatNum(cash), formatNum(power), tostring(speed),
+                State.AutoWave and "Enabled" or "Disabled",
+                tostring(targetEgg), tostring(minRarity),
+                tostring(activeEvText), tostring(nextEvTimer),
+                State.PrioritizeMutations and "Top Priority" or "Normal"
+            )
+
+            if statusLabel then
+                pcall(function() statusLabel:SetText(descText) end)
+            end
+        end)
+        task.wait(1)
+    end
+end)
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: SEA HUNT (wave sniping & egg selling)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gHunt = Tabs.Sea:AddLeftGroupbox("Sea Wave Hunting")
+gHunt:AddToggle("AutoWave", {
+    Text = "Auto Sea Wave",
+    Tooltip = "Automatically hunts sea creatures and eggs using the selected mode",
+    Default = State.AutoWave,
+    Callback = function(v) State.AutoWave = v end,
+})
+gHunt:AddLabel("── Egg Filters ──", { Unregistered = true })
+gHunt:AddMultiDropdown("MinEggRarity", {
+    Text = "Egg Rarities",
+    Tooltip = "Tick the rarities you want to collect — leave empty to accept everything",
+    Values = ALL_RARITY_NAMES,
+    Default = State.MinEggRarity,
+    Callback = function(v) State.MinEggRarity = v end,
+})
+
+gHunt:AddMultiDropdown("SpecificEggs", {
+    Text = "Target Specific Eggs",
+    Tooltip = "Pick one or more egg types to hunt — leave empty to hunt everything",
+    Values = ALL_EGG_DISPLAY_NAMES,
+    Default = State.SpecificEggs,
+    Callback = function(v) State.SpecificEggs = v end,
+})
+gHunt:AddToggle("PrioritizeMutations", {
+    Text = "Prioritize Mutations",
+    Default = State.PrioritizeMutations,
+    Callback = function(v) State.PrioritizeMutations = v end,
+})
+gHunt:AddToggle("VacuumEggs", {
+    Text = "Vacuum All Matching",
+    Tooltip = "Collects every egg matching your filters plus animals and boss items in one wave, instead of only the single best pick",
+    Default = State.VacuumEggs,
+    Callback = function(v) State.VacuumEggs = v end,
+})
+gHunt:AddLabel("── Event Bosses ──", { Unregistered = true })
+gHunt:AddToggle("AutoHuntEventBoss", {
+    Text = "Auto Hunt Event Boss",
+    Tooltip = "Hunts Dragon Eggs from Devil / Zeus bosses and Boss 5 automatically",
+    Default = State.AutoHuntEventBoss,
+    Callback = function(v) State.AutoHuntEventBoss = v end,
+})
+
+local gSell = Tabs.Shop:AddRightGroupbox("Sell Eggs by Rarity")
+local SellEggRarityOptions = {
+    "All Common - Rare",
+    "All Common - Epic",
+    "All Common - Legendary",
+    "Common (Basic)",
+    "Uncommon (Frog)",
+    "Rare (Bat)",
+    "Epic (Tiger)",
+    "Legendary (Trex)",
+    "Mythic (Snails)",
+    "Divine (Capybara)",
+    "Secret (Ostrich)",
+    "Cosmic (Snake)",
+    "Eternal (Sphinx / Mouse)",
+    "SPECIAL (Dragon / Polarbear / Seal...)",
+    "CYBER (Gorilla)",
+    "LAW (Mamut)",
+    "Titanium (Ocean)",
+    "Magical (Corals)",
+    "Nightfall (Sleepy)",
+    "Frosty (Glacial)",
+    "Lightning (Volt)"
+}
+gSell:AddToggle("AutoSellSpecificEgg", {
+    Text = "Auto Sell by Rarity",
+    Tooltip = "Continuously sells eggs matching the rarities selected below",
+    Default = State.AutoSellSpecificEgg,
+    Callback = function(v) State.AutoSellSpecificEgg = v end,
+})
+gSell:AddMultiDropdown("SellEggRarities", {
+    Text = "Rarities to Sell",
+    Tooltip = "Pick one or more — range options like 'All Common - Rare' also work",
+    Values = SellEggRarityOptions,
+    Default = State.SellEggRarities,
+    Callback = function(v) State.SellEggRarities = v end,
+})
+gSell:AddToggle("SellEggsNow", {
+    Text = "Sell Selected Now",
+    Tooltip = "One-shot: sells eggs matching the rarities selected above (auto-resets)",
+    Default = false,
+    Callback = function(v)
+        if not v then return end
+        task.spawn(function()
+            local count = sellSelectedEggs()
+            Notify({
+                Title = "Eggs Sold",
+                Content = string.format("Sold %d egg(s) matching the selected rarities.", count),
+                Duration = 3.5
+            })
+            task.wait(0.2)
+            pcall(function() Toggles.SellEggsNow:SetValue(false) end)
+        end)
+    end,
+})
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: AUTO FARM (training, hatchery, upgrades, rebirth)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gTrain = Tabs.Sea:AddRightGroupbox("Power Training")
+gTrain:AddToggle("AutoTrain", {
+    Text = "Auto Train Power",
+    Tooltip = "Trains power in the background — free to move around, no character lock",
+    Default = State.AutoTrain,
+    Callback = function(v)
+        State.AutoTrain = v
+        if not v then stopTraining() end
+    end,
+})
+gTrain:AddToggle("AutoClaimBonus", {
+    Text = "Auto Claim X2 Bonus",
+    Default = State.AutoClaimBonus,
+    Callback = function(v) State.AutoClaimBonus = v end,
+})
+
+local gMove = Tabs.Sea:AddRightGroupbox("Movement")
+gMove:AddToggle("CustomSpeedEnabled", {
+    Text = "Enable Custom Speed",
+    Default = State.CustomSpeedEnabled,
+    Callback = function(v) State.CustomSpeedEnabled = v end,
+})
+gMove:AddSlider("CustomSpeedValue", {
+    Text = "Custom Speed",
+    Min = 16, Max = 200, Default = State.CustomSpeedValue, Rounding = 0,
+    Callback = function(v) State.CustomSpeedValue = v end,
+})
+
+local gPlot = Tabs.Farm:AddRightGroupbox("Hatchery & Base Plot")
+gPlot:AddToggle("AutoHatchEggs", {
+    Text = "Auto Hatch Eggs",
+    Tooltip = "Places eggs on your plot and hatches them the moment the timer ends",
+    Default = State.AutoHatchEggs,
+    Callback = function(v) State.AutoHatchEggs = v end,
+})
+gPlot:AddToggle("AutoEquipBest", {
+    Text = "Auto Equip Best",
+    Default = State.AutoEquipBest,
+    Callback = function(v) State.AutoEquipBest = v end,
+})
+gPlot:AddToggle("AutoSellAnimals", {
+    Text = "Auto Sell Unused",
+    Default = State.AutoSellAnimals,
+    Callback = function(v) State.AutoSellAnimals = v end,
+})
+gPlot:AddToggle("AutoOfflineCash", {
+    Text = "Auto Offline Cash",
+    Default = State.AutoOfflineCash,
+    Callback = function(v) State.AutoOfflineCash = v end,
+})
+
+local gUpg = Tabs.Farm:AddLeftGroupbox("Character & Plot Upgrades")
+gUpg:AddToggle("AutoUpgradePlot", {
+    Text = "Auto Upgrade Plot",
+    Default = State.AutoUpgradePlot,
+    Callback = function(v) State.AutoUpgradePlot = v end,
+})
+gUpg:AddToggle("AutoUpgradeSpeed", {
+    Text = "Auto Speed Upgrade",
+    Default = State.AutoUpgradeSpeed,
+    Callback = function(v) State.AutoUpgradeSpeed = v end,
+})
+gUpg:AddToggle("AutoUpgradeCarry", {
+    Text = "Auto Carry Upgrade",
+    Default = State.AutoUpgradeCarry,
+    Callback = function(v) State.AutoUpgradeCarry = v end,
+})
+
+local gReb = Tabs.Farm:AddRightGroupbox("Rebirth Engine")
+gReb:AddToggle("AutoRebirth", {
+    Text = "Auto Rebirth",
+    Tooltip = "Checks your cash before rebirth — raises the permanent money multiplier",
+    Default = State.AutoRebirth,
+    Callback = function(v) State.AutoRebirth = v end,
+})
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: SHOP (gear & free shop purchases)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gGear = Tabs.Shop:AddLeftGroupbox("Gear Shop")
+gGear:AddToggle("AutoBuyDumbbell", {
+    Text = "Auto Buy Dumbbell",
+    Tooltip = "Buys the best dumbbell you can afford whenever a better one is available",
+    Default = State.AutoBuyDumbbell,
+    Callback = function(v) State.AutoBuyDumbbell = v end,
+})
+gGear:AddToggle("AutoBuyStaff", {
+    Text = "Auto Buy Staff",
+    Tooltip = "Buys the best training staff you can afford whenever a better one is available",
+    Default = State.AutoBuyStaff,
+    Callback = function(v) State.AutoBuyStaff = v end,
+})
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: PLAYERS (bulk trade & gifting)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gAccept = Tabs.Trade:AddLeftGroupbox("Auto Accept Receiver")
+gAccept:AddToggle("AutoAcceptGifts", {
+    Text = "Auto Accept Gifts",
+    Tooltip = "Instantly accepts animals other players send you — zero delay",
+    Default = State.AutoAcceptGifts,
+    Callback = function(v) State.AutoAcceptGifts = v end,
+})
+
+local gBulk = Tabs.Trade:AddLeftGroupbox("Bulk Send / Gift")
+local playerNames = getOnlinePlayerNames()
+local initialPlayer = playerNames[1] or ""
+if initialPlayer:find("No Other Players") then
+    initialPlayer = ""
+end
+State.TradeTargetPlayer = initialPlayer
+
+gBulk:AddDropdown("TradeTargetPlayer", {
+    Text = "Target Player",
+    Values = playerNames,
+    Default = initialPlayer ~= "" and initialPlayer or (playerNames[1] or ""),
+    Callback = function(v)
+        if v and not v:find("No Other Players") then
+            State.TradeTargetPlayer = v
+        else
+            State.TradeTargetPlayer = ""
+        end
+    end,
+})
+task.spawn(function()
+    while _G.OpenSeaRunning and _G.OpenSeaRunId == thisRunId do
+        task.wait(15)
+        pcall(function()
+            local refreshed = getOnlinePlayerNames()
+            if UIControls.TradeTargetPlayer then
+                UIControls.TradeTargetPlayer:SetValues(refreshed)
+            end
+            local current = State.TradeTargetPlayer
+            local found = false
+            for _, n in ipairs(refreshed) do
+                if n == current then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                if refreshed[1] and not refreshed[1]:find("No Other Players") then
+                    State.TradeTargetPlayer = refreshed[1]
+                    pcall(function() UIControls.TradeTargetPlayer:SetValue(refreshed[1]) end)
+                else
+                    State.TradeTargetPlayer = ""
+                end
+            end
+            local animals = getAnimalFilterList()
+            if UIControls.TradeFilterAnimal then
+                UIControls.TradeFilterAnimal:SetValues(animals)
+            end
+        end)
+    end
+end)
+
+local animalFilters = getAnimalFilterList()
+State.TradeFilterAnimal = animalFilters[1] or "All Animals"
+
+gBulk:AddDropdown("TradeFilterAnimal", {
+    Text = "Animal Filter",
+    Values = animalFilters,
+    Default = animalFilters[1] or "All Animals",
+    Callback = function(v) State.TradeFilterAnimal = v end,
+})
+gBulk:AddLabel("── Send Options ──", { Unregistered = true })
+gBulk:AddSlider("TradeQuantity", {
+    Text = "Amount to Send",
+    Min = 1, Max = 100, Default = State.TradeQuantity, Rounding = 0,
+    Callback = function(v) State.TradeQuantity = v end,
+})
+gBulk:AddToggle("TradeInstantBurst", {
+    Text = "Instant Burst Mode",
+    Tooltip = "Fires every animal at once with zero delay — best for bot accounts running Auto Accept",
+    Default = State.TradeInstantBurst,
+    Callback = function(v) State.TradeInstantBurst = v end,
+})
+gBulk:AddSlider("TradeSpeedDelay", {
+    Text = "Send Delay Seconds",
+    Min = 0.01, Max = 1.0, Default = State.TradeSpeedDelay, Rounding = 2, Suffix = "s",
+    Callback = function(v) State.TradeSpeedDelay = v end,
+})
+gBulk:AddToggle("BulkSendActive", {
+    Text = "Bulk Send Active",
+    Tooltip = "Turn on to start sending, turn off to stop",
+    Default = false,
+    Callback = function(v)
+        if v then
+            startBulkTrade()
+        else
+            stopBulkTrade()
+        end
+    end,
+})
+
+local gTradeInfo = Tabs.Trade:AddRightGroupbox("Info")
+gTradeInfo:AddParagraph("Burst Mode fires all animals at once in a split second — best for bot accounts running Auto Accept.\n\nQueued mode sends one at a time using Send Delay — slower but safer.\n\nAnimals placed on your plot are never sent automatically.")
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: REWARDS (freebies, pass, quests, potions, codes)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gFree = Tabs.Rewards:AddLeftGroupbox("Free Rewards")
+gFree:AddToggle("AutoPlaytimeGifts", {
+    Text = "Auto Playtime Gifts",
+    Tooltip = "Claims timed playtime gifts as soon as they unlock",
+    Default = State.AutoPlaytimeGifts,
+    Callback = function(v) State.AutoPlaytimeGifts = v end,
+})
+gFree:AddToggle("AutoDailyRewards", {
+    Text = "Auto Daily Rewards",
+    Tooltip = "Claims your daily login reward every 24 hours (and the VIP daily if owned)",
+    Default = State.AutoDailyRewards,
+    Callback = function(v) State.AutoDailyRewards = v end,
+})
+gFree:AddToggle("AutoGroupReward", {
+    Text = "Auto Group Reward",
+    Tooltip = "Claims the one-time Roblox group reward (requires joining the game group)",
+    Default = State.AutoGroupReward,
+    Callback = function(v) State.AutoGroupReward = v end,
+})
+gFree:AddToggle("AutoSpinWheel", {
+    Text = "Auto Spin Wheel",
+    Tooltip = "Spins the wheel automatically — spends 25 Luminous Coins per spin",
+    Default = State.AutoSpinWheel,
+    Callback = function(v) State.AutoSpinWheel = v end,
+})
+
+local gFreeShop = Tabs.Rewards:AddLeftGroupbox("Free Shop")
+gFreeShop:AddToggle("AutoFreeShop", {
+    Text = "Auto Claim Free Item",
+    Tooltip = "Claims the current free item in the shop when it rotates in",
+    Default = State.AutoFreeShop,
+    Callback = function(v) State.AutoFreeShop = v end,
+})
+gFreeShop:AddParagraph("The free shop rotates a free item on a timer — the script claims it automatically the moment a new one appears.")
+
+local gPass = Tabs.Rewards:AddLeftGroupbox("Season Pass & Quests")
+gPass:AddToggle("AutoSeasonPass", {
+    Text = "Auto Claim Season Pass",
+    Tooltip = "Claims unlocked free-tier season pass rewards using your Pass Exp",
+    Default = State.AutoSeasonPass,
+    Callback = function(v) State.AutoSeasonPass = v end,
+})
+gPass:AddToggle("AutoQuests", {
+    Text = "Auto Claim Quests",
+    Tooltip = "Claims completed quest rewards (Season Pass & hourly quests)",
+    Default = State.AutoQuests,
+    Callback = function(v) State.AutoQuests = v end,
+})
+gPass:AddParagraph("Rewards are claimed only when the game marks them ready — server cooldowns still apply, so claims may take a moment after they unlock.")
+
+local gPot = Tabs.Rewards:AddRightGroupbox("Potions & Boosts")
+gPot:AddToggle("AutoUsePotions", {
+    Text = "Auto Use Potions",
+    Tooltip = "Master switch — keeps the potion buffs selected below active",
+    Default = State.AutoUsePotions,
+    Callback = function(v) State.AutoUsePotions = v end,
+})
+gPot:AddMultiDropdown("AutoPotions", {
+    Text = "Potions to Keep Active",
+    Tooltip = "Tick which potions to auto-use whenever they are in your inventory",
+    Values = { "Train", "Cash", "Luck" },
+    Default = State.AutoPotions,
+    Callback = function(v) State.AutoPotions = v end,
+})
+gPot:AddDropdown("DrinkPotion", {
+    Text = "Drink Potion Now",
+    Tooltip = "Pick a potion to use it instantly (not saved)",
+    Values = { "Train", "Cash", "Luck" },
+    Default = "Train",
+    Callback = function(kind)
+        local ok = pcall(function() PotionService.RF.UsePotion:InvokeServer(kind) end)
+        Notify({ Title = ok and "Success" or "Failed", Content = ok and (kind .. " Potion x2 activated!") or "No " .. kind .. " potion in inventory", Duration = 3 })
+    end,
+})
+
+local gCodes = Tabs.Rewards:AddRightGroupbox("Promo Codes")
+gCodes:AddToggle("AutoRedeemCodes", {
+    Text = "Auto Redeem Codes",
+    Tooltip = "Tries every known and predicted code — newly released codes redeem themselves",
+    Default = State.AutoRedeemCodes,
+    Callback = function(v) State.AutoRedeemCodes = v end,
+})
+gCodes:AddParagraph("Keeps scanning known codes plus predicted ones (UPDATE#, like/visit milestones, event names).\n\nWhen the devs release a new code it gets redeemed automatically — you'll get a notification with the code name. Codes you already used are skipped.")
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: TELEPORT (locations & movement)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local gTp = Tabs.Teleport:AddLeftGroupbox("Locations")
+gTp:AddDropdown("TeleportTo", {
+    Text = "Teleport To",
+    Tooltip = "Pick a destination to teleport there instantly (not saved)",
+    Values = { "My Plot", "Sea Edge", "Dumbbell Shop", "Staff Shop" },
+    Default = "My Plot",
+    Callback = function(dest)
+        task.spawn(function()
+            if dest == "My Plot" then
+                local myPlot = getMyPlotModel()
+                local warp = myPlot and (myPlot:FindFirstChild(myPlot.Name .. "_WarpPart") or myPlot:FindFirstChild("PlotSurface"))
+                if warp then
+                    safeTeleport(warp.CFrame * CFrame.new(0, 3, 0))
+                else
+                    safeTeleport(CFrame.new(733.8, 80.0, 398.2))
+                end
+            elseif dest == "Sea Edge" then
+                safeTeleport(CFrame.new(661.8, 77.0, 325.2))
+            elseif dest == "Dumbbell Shop" then
+                safeTeleport(CFrame.new(667.6, 73.0, 281.8))
+            elseif dest == "Staff Shop" then
+                safeTeleport(CFrame.new(664.1, 72.0, 363.2))
+            end
+        end)
+    end,
+})
+
+local gServer = Tabs.Teleport:AddRightGroupbox("Server Tools")
+gServer:AddDropdown("ServerAction", {
+    Text = "Server Action",
+    Tooltip = "Pick an action to run it instantly (not saved)",
+    Values = { "Rejoin Server", "Random Server Hop", "Smallest Server" },
+    Default = "Rejoin Server",
+    Callback = function(action)
+        task.spawn(function()
+            if action == "Rejoin Server" then
+                serverHop("rejoin")
+            elseif action == "Random Server Hop" then
+                serverHop("random")
+            elseif action == "Smallest Server" then
+                serverHop("smallest")
+            end
+        end)
+    end,
+})
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: WEBHOOK (discord alerts & notifications)
+-- ─────────────────────────────────────────────────────────────────────────────────
+local WEBHOOK_RARITY_OPTIONS = {
+    "Secret+ (Ostrich+)",
+    "Cosmic+ (Snake+)",
+    "Eternal+ (Sphinx+)",
+    "SPECIAL+ (Dragon / Polarbear+)",
+    "CYBER+ (Gorilla+)",
+    "LAW+ (Mamut+)",
+    "Titanium+ (Ocean+)",
+    "Magical+ (Corals+)",
+    "Nightfall+ (Sleepy+)",
+    "Frosty+ (Glacial+)",
+    "Lightning+ (Volt+)",
+}
+
+local gHook = Tabs.Webhook:AddLeftGroupbox("Discord Webhook")
+gHook:AddToggle("WebhookAlerts", {
+    Text = "Enable Discord Alerts",
+    Tooltip = "Sends Discord notifications when rare eggs or event bosses appear",
+    Default = State.WebhookAlerts,
+    Callback = function(v) State.WebhookAlerts = v end,
+})
+gHook:AddInput("WebhookURL", {
+    Text = "Webhook URL",
+    Default = State.WebhookURL,
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Callback = function(v) State.WebhookURL = v end,
+})
+gHook:AddToggle("SendTestAlert", {
+    Text = "Send Test Alert",
+    Tooltip = "One-shot: pings your Discord webhook (auto-resets)",
+    Default = false,
+    Callback = function(v)
+        if not v then return end
+        task.spawn(function()
+            if not httpRequest then
+                Notify({ Title = "Unsupported", Content = "This executor has no HTTP request function.", Duration = 4 })
+            elseif type(State.WebhookURL) ~= "string" or not State.WebhookURL:match("^https://discord") then
+                Notify({ Title = "Invalid Webhook", Content = "Please paste a Discord Webhook URL first.", Duration = 4 })
+            else
+                local wasOff = not State.WebhookAlerts
+                if wasOff then State.WebhookAlerts = true end
+                sendWebhookAlert("SKT Hub — Test Alert", "Webhook connected!\nPlayer: " .. tostring(LP.DisplayName), 3066993)
+                if wasOff then State.WebhookAlerts = false end
+                Notify({ Title = "Sent", Content = "Test message sent to Discord.", Duration = 3 })
+            end
+            task.wait(0.2)
+            pcall(function() Toggles.SendTestAlert:SetValue(false) end)
+        end)
+    end,
+})
+
+local gRules = Tabs.Webhook:AddRightGroupbox("Alert Rules")
+gRules:AddToggle("WebhookRareEggs", {
+    Text = "Alert on Rare Eggs",
+    Tooltip = "Scans the sea for rare eggs and boss items and pings your Discord",
+    Default = State.WebhookRareEggs,
+    Callback = function(v) State.WebhookRareEggs = v end,
+})
+gRules:AddDropdown("WebhookMinRarity", {
+    Text = "Min Egg Rarity",
+    Values = WEBHOOK_RARITY_OPTIONS,
+    Default = State.WebhookMinRarity,
+    Callback = function(v) State.WebhookMinRarity = v end,
+})
+gRules:AddToggle("WebhookBossAlerts", {
+    Text = "Alert on Event Bosses",
+    Tooltip = "Pings your Discord when a Devil / Zeus event boss spawns",
+    Default = State.WebhookBossAlerts,
+    Callback = function(v) State.WebhookBossAlerts = v end,
+})
+gRules:AddParagraph("Alerts are delivered as Discord embeds with the egg name, mutation and size.\n\nRequires an executor with HTTP request support (request / http_request / syn.request).")
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- TAB: SETTINGS (config & interface)
+-- ─────────────────────────────────────────────────────────────────────────────────
+SaveManager:SetLibrary(Library)
+SaveManager:SetFolder("SKTHub/OpenSea")
+SaveManager:SetIgnoreIndexes({
+    "CustomPromoCode", "ThemePreset", "MenuKeybind", "CfgAutoload", "DrinkPotion",
+    -- one-shot actions: never persisted so they cannot re-fire on config load
+    "TeleportTo", "ServerAction", "ConfigAction", "InterfaceAction", "BulkSendActive",
+    "SellEggsNow", "StopTrainingNow", "SellUnusedNow", "UnlockWalk", "RedeemAllCodes", "SendTestAlert",
+})
+
+-- Auto Save Engine: silently persist every change to the active config
+local lastConfigLoad = 0
+local autosaveScheduled = false
+
+local function autosaveNow()
+    pcall(function()
+        if not SaveManager:_EnsureFolders() then return end
+        local raw = SaveManager.Controls.Name and SaveManager.Controls.Name.Value or ""
+        local name = tostring(raw):match("^%s*(.-)%s*$"):gsub("[^%w%-%_ ]", ""):gsub("%s+", "_"):sub(1, 48)
+        if name == "" or name == "(none)" or name == "none" then name = "Default" end
+        writefile(SaveManager:_ConfigPath(name), HttpService:JSONEncode(SaveManager:_Capture()))
+        writefile(SaveManager.Folder .. "/autoload.txt", name)
+    end)
+end
+
+local function scheduleAutosave()
+    if not State.CfgAutosave then return end
+    if Library._ConfigLoading then return end
+    if (os.clock() - lastConfigLoad) < 3 then return end
+    if autosaveScheduled then return end
+    autosaveScheduled = true
+    task.delay(2.5, function()
+        autosaveScheduled = false
+        if State.CfgAutosave and not Library._ConfigLoading then
+            autosaveNow()
+        end
+    end)
+end
+
+-- Migrate legacy (Thai) values saved by older configs to the new English values
+local LEGACY_VALUE_MAP = {
+    ["ทุกระดับ (All Eggs - Common+)"] = "All Eggs (Common+)",
+    ["ไม่จำกัด / สูงสุดตลอดเวลา"] = "Unlimited / Max",
+    ["ทั้งหมด (All Animals)"] = "All Animals",
+}
+local function migrateValue(v)
+    if type(v) ~= "string" then return v end
+    if LEGACY_VALUE_MAP[v] then return LEGACY_VALUE_MAP[v] end
+    local nv = v:gsub("%s*ขึ้นไป", "+")          -- "Cosmic ขึ้นไป (Snake+)" -> "Cosmic+ (Snake+)"
+    nv = nv:gsub("^ทั้งหมด%s*", "All ")           -- "ทั้งหมด Common - Rare" -> "All Common - Rare"
+    nv = nv:gsub("^ทุกระดับ%s*", "All ")
+    return nv
+end
+local function migrateLegacyValues()
+    for _, key in ipairs({ "WebhookMinRarity", "TargetRebirth", "TradeFilterAnimal" }) do
+        local opt = Options[key]
+        local cur = opt and opt.Value or State[key]
+        local nv = migrateValue(cur)
+        if nv ~= cur then
+            if opt and opt.SetValue then
+                pcall(function() opt:SetValue(nv) end)
+            else
+                State[key] = nv
+            end
+        end
+    end
+    -- multi-select egg filters: normalize each entry and drop unknown values
+    local sellSet = {}
+    for _, o in ipairs(SellEggRarityOptions) do sellSet[o] = true end
+    local function validSell(e)
+        return sellSet[e] == true
+    end
+    local POTION_KINDS = { Train = true, Cash = true, Luck = true }
+    for _, key in ipairs({ "SpecificEggs", "SellEggRarities", "MinEggRarity", "AutoPotions" }) do
+        local opt = Options[key]
+        local cur = opt and opt.Value or State[key]
+        -- legacy scalar values (e.g. old "Secret+ (Ostrich+)" threshold) only survive
+        -- in the raw config blob once the option became a multi-dropdown
+        local raw = Library._LastLoadedConfig and Library._LastLoadedConfig.options
+            and Library._LastLoadedConfig.options[key]
+        if type(raw) == "string" and raw ~= "" then
+            cur = raw
+        end
+        -- legacy per-potion toggles -> multi-select array
+        if key == "AutoPotions" and (type(cur) ~= "table" or #cur == 0) then
+            local lt = Library._LastLoadedConfig and Library._LastLoadedConfig.toggles or {}
+            if lt.AutoUsePotions == true then
+                local legacy = {}
+                if lt.AutoUseTrainPotion then table.insert(legacy, "Train") end
+                if lt.AutoUseCashPotion then table.insert(legacy, "Cash") end
+                if lt.AutoUseLuckPotion then table.insert(legacy, "Luck") end
+                if #legacy > 0 then cur = legacy end
+            end
+        end
+        local arr = {}
+        if type(cur) == "table" then
+            for _, e in ipairs(cur) do table.insert(arr, migrateValue(e)) end
+        elseif type(cur) == "string" and cur ~= "" then
+            local mv = migrateValue(cur)
+            if key == "MinEggRarity" and MinRarityThresholds[mv] then
+                -- legacy threshold string (e.g. "Secret+ (Ostrich+)") -> array of rarities at or above it
+                local minRank = MinRarityThresholds[mv]
+                for _, rn in ipairs(ALL_RARITY_NAMES) do
+                    if EggRarityRanks[rn] >= minRank then table.insert(arr, rn) end
+                end
+            else
+                table.insert(arr, mv)
+            end
+        end
+        local cleaned = {}
+        for _, e in ipairs(arr) do
+            local okEntry = (key == "SpecificEggs" and EggNameMapping[e] ~= nil)
+                or (key == "SellEggRarities" and validSell(e))
+                or (key == "MinEggRarity" and EggRarityRanks[e] ~= nil)
+                or (key == "AutoPotions" and POTION_KINDS[e] == true)
+            if okEntry then table.insert(cleaned, e) end
+        end
+        State[key] = cleaned
+        if opt and opt.SetValue then
+            pcall(function() opt:SetValue(cleaned) end)
+        end
+    end
+end
+
+SaveManager.AfterLoad = function(_, name)
+    lastConfigLoad = os.clock()
+    pcall(function()
+        if SaveManager.Controls.Name and SaveManager.Controls.Name.Set then
+            SaveManager.Controls.Name:Set(name)
+        end
+    end)
+    pcall(migrateLegacyValues)
+end
+
+local gConfig = Tabs.Settings:AddLeftGroupbox("Config Manager")
+local cfgNameOption = gConfig:AddInput("__ConfigName", {
+    Text = "Config Name",
+    Default = "Default",
+    Placeholder = "Type config name...",
+})
+local savedList = SaveManager:GetConfigs()
+if #savedList == 0 then savedList = { "(none)" } end
+local cfgListOption = gConfig:AddDropdown("__ConfigList", {
+    Text = "Select Config",
+    Values = savedList,
+    Default = savedList[1],
+})
+SaveManager.Controls.Name = cfgNameOption
+SaveManager.Controls.List = cfgListOption
+
+gConfig:AddDropdown("ConfigAction", {
+    Text = "Config Action",
+    Tooltip = "Pick an action to run on the selected config (not saved)",
+    Values = { "Save Config", "Load Config", "Delete Config", "Refresh List", "Export Config", "Import Config" },
+    Default = "Save Config",
+    Callback = function(action)
+        task.spawn(function()
+            if action == "Save Config" then
+                SaveManager:Save()
+            elseif action == "Load Config" then
+                SaveManager:Load()
+            elseif action == "Delete Config" then
+                SaveManager:Delete()
+            elseif action == "Refresh List" then
+                SaveManager:Refresh()
+            elseif action == "Export Config" then
+                SaveManager:Export()
+            elseif action == "Import Config" then
+                local ok = SaveManager:Import()
+                if ok and SaveManager.Controls.ImportText then
+                    pcall(function() SaveManager.Controls.ImportText:SetValue("") end)
+                end
+            end
+        end)
+    end,
+})
+SaveManager.Controls.ImportText = gConfig:AddInput("__ConfigImport", {
+    Text = "Import JSON",
+    Placeholder = "Paste exported config here...",
+})
+gConfig:AddToggle("CfgAutoload", {
+    Text = "Auto Load on Boot",
+    Default = false,
+    Callback = function(v)
+        if v then
+            SaveManager:SetAutoload()
+        else
+            SaveManager:ClearAutoload()
+        end
+    end,
+})
+gConfig:AddToggle("CfgAutosave", {
+    Text = "Auto Save",
+    Tooltip = "Auto-saves the selected config on every change and reloads it on the next run",
+    Default = State.CfgAutosave,
+    Callback = function(v)
+        State.CfgAutosave = v
+        if not v then autosaveNow() end
+    end,
+})
+
+local gUI = Tabs.Settings:AddRightGroupbox("Interface")
+gUI:AddDropdown("ThemePreset", {
+    Text = "Theme",
+    Values = { "Cyber", "Gold", "Sapphire", "Amethyst", "Jade", "Crimson", "Mono" },
+    Default = "Cyber",
+    Callback = function(v) pcall(function() Library:SetTheme(v) end) end,
+})
+gUI:AddKeybind("MenuKeybind", {
+    Text = "Menu Toggle Key",
+    Default = "RightShift",
+    SyncMenu = true,
+})
+gUI:AddToggle("AntiAFK", {
+    Text = "Anti-AFK System",
+    Tooltip = "Blocks kick scripts and spoofs hardware signals",
+    Default = State.AntiAFK,
+    Callback = function(v) State.AntiAFK = v end,
+})
+gUI:AddToggle("FPSBoost", {
+    Text = "FPS Boost Mode",
+    Tooltip = "Disables shadows, effects, particles and water — reduces lag on long sessions",
+    Default = State.FPSBoost,
+    Callback = function(v)
+        State.FPSBoost = v
+        setFpsBoost(v)
+    end,
+})
+gUI:AddDropdown("InterfaceAction", {
+    Text = "Quick Actions",
+    Tooltip = "Pick an action to run it instantly (not saved)",
+    Values = { "Copy Discord Link", "Unload Script" },
+    Default = "Copy Discord Link",
+    Callback = function(action)
+        task.spawn(function()
+            if action == "Copy Discord Link" then
+                local ok = pcall(function()
+                    if setclipboard then
+                        setclipboard("https://discord.gg/byaQzu3Mr")
+                    elseif toclipboard then
+                        toclipboard("https://discord.gg/byaQzu3Mr")
+                    end
+                end)
+                Notify({ Title = ok and "Copied" or "Failed", Content = ok and "Discord link copied to clipboard!" or "Executor does not support clipboard.", Duration = 3 })
+            elseif action == "Unload Script" then
+                pcall(_G.OpenSeaCleanup)
+            end
+        end)
+    end,
+})
+
+pcall(function() Library:OptimizeScrolling() end)
+
+-- Watch every bound option/toggle → debounced silent auto-save
+for _, bucket in ipairs({ Toggles, Options }) do
+    for _, option in pairs(bucket or {}) do
+        if type(option) == "table" and type(option.OnChanged) == "function" then
+            pcall(function()
+                option:OnChanged(function() scheduleAutosave() end)
+            end)
+        end
+    end
+end
+
+-- ── 10. FLOATING TOGGLE BUTTON (drag + tap to toggle) ────────────────────────────
+local function createFloatingToggle()
+    if _G.SKTMobileToggleBtn then pcall(function() _G.SKTMobileToggleBtn:Destroy() end) end
+
+    local sg = Instance.new("ScreenGui")
+    _G.SKTMobileToggleBtn = sg
+    sg.Name = "SKTHub_FloatingToggle"
+    sg.DisplayOrder = 2147483647
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+
+    local parented = false
+    local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local playerGui = LP and LP:FindFirstChildOfClass("PlayerGui")
+    if touchOnly and playerGui then
+        parented = pcall(function() sg.Parent = playerGui end) and sg.Parent == playerGui
+    end
+    if not parented then
+        pcall(function() sg.Parent = (typeof(gethui) == "function" and gethui()) or CoreGui; parented = true end)
+    end
+    if not parented and playerGui then
+        pcall(function() sg.Parent = playerGui end)
+    end
+
+    local toggleBtn = Instance.new("TextButton", sg)
+    toggleBtn.Name = "ShieldToggle"
+    toggleBtn.Size = UDim2.fromOffset(50, 50)
+    toggleBtn.Position = UDim2.new(0.5, -25, 0, 14)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+    toggleBtn.Text = ""
+    toggleBtn.AutoButtonColor = false
+    toggleBtn.ClipsDescendants = true
+    toggleBtn.ZIndex = 100
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
+
+    local btnStroke = Instance.new("UIStroke", toggleBtn)
+    btnStroke.Thickness = 1.8
+    btnStroke.Color = Color3.fromRGB(255, 255, 255)
+    btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    local strokeGrad = Instance.new("UIGradient", btnStroke)
+    strokeGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.35, Color3.fromRGB(180, 185, 195)),
+        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(60, 60, 70)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+    })
+
+    local btnGrad = Instance.new("UIGradient", toggleBtn)
+    btnGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 28, 36)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(16, 16, 22)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 12))
+    })
+    btnGrad.Rotation = 45
+
+    local logo = Instance.new("ImageLabel", toggleBtn)
+    logo.Name = "BrandLogo"
+    logo.Size = UDim2.fromOffset(32, 32)
+    logo.AnchorPoint = Vector2.new(0.5, 0.5)
+    logo.Position = UDim2.fromScale(0.5, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.Image = "rbxassetid://111753595811895"
+    logo.ScaleType = Enum.ScaleType.Crop
+    logo.ZIndex = 102
+    Instance.new("UICorner", logo).CornerRadius = UDim.new(0, 8)
+
+    local logoStroke = Instance.new("UIStroke", logo)
+    logoStroke.Thickness = 1
+    logoStroke.Color = Color3.fromRGB(255, 255, 255)
+    logoStroke.Transparency = 0.45
+
+    task.spawn(function()
+        local rot = 0
+        while task.wait(0.033) do
+            if not sg.Parent then break end
+            rot = (rot + 5) % 360
+            strokeGrad.Rotation = rot
+        end
+    end)
+
+    local ts = TweenService
+    toggleBtn.MouseEnter:Connect(function()
+        ts:Create(toggleBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+        }):Play()
+    end)
+    toggleBtn.MouseLeave:Connect(function()
+        ts:Create(toggleBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        }):Play()
+    end)
+
+    local function executeToggle()
+        pcall(function() Library:Toggle() end)
+    end
+
+    local dragToggle = false
+    local dragStart, startPos
+    local dragged = false
+    local movedConn
+
+    toggleBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragToggle = true
+            dragged = false
+            dragStart = input.Position
+            startPos = toggleBtn.Position
+            ts:Create(toggleBtn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(44, 44)
+            }):Play()
+
+            if movedConn then movedConn:Disconnect() end
+            movedConn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.Change then
+                    if (input.Position - dragStart).Magnitude > 4 then
+                        dragged = true
+                    end
+                elseif input.UserInputState == Enum.UserInputState.End then
+                    dragToggle = false
+                    if movedConn then movedConn:Disconnect() end
+                    ts:Create(toggleBtn, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                        Size = UDim2.fromOffset(50, 50)
+                    }):Play()
+                    if not dragged then
+                        executeToggle()
+                    end
+                end
+            end)
+        end
+    end)
+
+    local dragInput
+    toggleBtn.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    local uisConn = UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragToggle and dragStart then
+            local delta = input.Position - dragStart
+            toggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    sg.Destroying:Connect(function()
+        if movedConn then movedConn:Disconnect() end
+        if uisConn then uisConn:Disconnect() end
+    end)
+end
+
+pcall(createFloatingToggle)
+
+-- ── 11. BOOT SEQUENCE ────────────────────────────────────────────────────────────
+task.delay(0.5, function()
+    pcall(function() SaveManager:LoadAutoloadConfig() end)
+end)
+
+pcall(function()
+    if Window.Raw and Window.Raw.SelectTab then
+        Window.Raw:SelectTab(Tabs.Main.Raw)
+    end
+end)
+
+-- intro is done building — close the splash right away (short beat so it doesn't flash)
+task.delay(0.8, function()
+    pcall(function() Window:CompleteIntro() end)
+end)
+
+Notify({
+    Title = "SKT Hub Loaded",
+    Content = "Open Sea For Animals is ready!",
+    Duration = 5
+})
